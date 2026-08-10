@@ -36,7 +36,7 @@
     <button id="custom-ar-btn">ENTER NOEMATA AR</button>
 
     <script>
-        // Force WebGL Canvas Transparency
+        // Force WebGL Canvas Transparency for AR Passthrough
         AFRAME.registerComponent('force-ar-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -50,7 +50,7 @@
             }
         });
 
-        // Hit-Testing Component
+        // Hit-Testing & Spatial Anchor Manager Component
         AFRAME.registerComponent('noemata-spatial-manager', {
             init: function () {
                 this.xrHitTestSource = null;
@@ -102,11 +102,13 @@
         });
     </script>
 
-    <a-scene webxr="optionalFeatures: hit-test, local-floor; referenceSpaceType: local-floor;"
+    <a-scene webxr="optionalFeatures: hit-test, anchors, local-floor; referenceSpaceType: local-floor;"
              force-ar-passthrough
+             background="transparent: true"
              noemata-spatial-manager
-             renderer="alpha: true; colorManagement: true;"
-             xr-mode-ui="enabled: false">
+             renderer="alpha: true; colorManagement: true; antialias: true;"
+             xr-mode-ui="enabled: false"
+             style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
         
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
@@ -185,15 +187,29 @@
             statusLabel.setAttribute('color', '#64748b');
         }
 
-        // Native Native Custom Button Listener
-        document.getElementById('custom-ar-btn').addEventListener('click', () => {
+        // Force Native WebXR Immersive-AR Session Request for Passthrough
+        document.getElementById('custom-ar-btn').addEventListener('click', async () => {
             const sceneEl = document.querySelector('a-scene');
-            if (sceneEl.hasLoaded) {
-                sceneEl.enterVR();
+            const button = document.getElementById('custom-ar-btn');
+
+            if (navigator.xr) {
+                try {
+                    const session = await navigator.xr.requestSession('immersive-ar', {
+                        optionalFeatures: ['hit-test', 'anchors', 'local-floor']
+                    });
+
+                    await sceneEl.renderer.xr.setSession(session);
+                    button.style.display = 'none';
+                    sceneEl.renderer.setClearColor(0x000000, 0);
+                } catch (err) {
+                    console.warn('Direct AR request fallback to scene.enterVR():', err);
+                    sceneEl.enterVR();
+                    button.style.display = 'none';
+                }
             } else {
-                sceneEl.addEventListener('loaded', () => sceneEl.enterVR());
+                sceneEl.enterVR();
+                button.style.display = 'none';
             }
-            document.getElementById('custom-ar-btn').style.display = 'none';
         });
     </script>
 </body>
