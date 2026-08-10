@@ -34,7 +34,7 @@
             }
         });
 
-        // Hit-Testing Component & Controller Surface Lock
+        // Hit-Testing Component & Controller Trigger Selection
         AFRAME.registerComponent('noemata-spatial-manager', {
             init: function () {
                 this.xrHitTestSource = null;
@@ -58,7 +58,7 @@
                         this.refSpace = refSpace;
                     });
 
-                    // TRIGGER PULL LISTENER FOR SURFACE LOCKING
+                    // LISTEN FOR CONTROLLER TRIGGER TO LOCK SURFACE LOCATION
                     session.addEventListener('select', () => {
                         if (!window.isHoveringButton && window.latestHitPos && !window.isPosLocked) {
                             window.isPosLocked = true;
@@ -104,19 +104,19 @@
         });
     </script>
 
-    <!-- Uses A-Frame native xr-mode-ui for native AR button initialization -->
+    <!-- Native A-Frame WebXR setup handles the AR/VR entry trigger directly -->
     <a-scene webxr="requiredFeatures: hit-test; optionalFeatures: anchors, unbounded; referenceSpaceType: local-floor;"
              force-passthrough
              noemata-spatial-manager
              renderer="alpha: true; colorManagement: true; antialias: true;"
-             xr-mode-ui="mode: ar"
+             xr-mode-ui="enabled: true; mode: ar"
              style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
         
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
         </a-entity>
 
-        <!-- Laser Controllers targeting buttons -->
+        <!-- Laser Controllers -->
         <a-entity laser-controls="hand: left" raycaster="objects: .ui-button; far: 5;"></a-entity>
         <a-entity laser-controls="hand: right" raycaster="objects: .ui-button; far: 5;"></a-entity>
 
