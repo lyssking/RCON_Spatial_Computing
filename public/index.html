@@ -18,24 +18,23 @@
 <body style="margin: 0; overflow: hidden; background-color: transparent !important; background: transparent !important;">
 
     <script>
-        AFRAME.registerComponent('force-passthrough', {
+        AFRAME.registerComponent('force-ar-passthrough', {
             init: function () {
-                this.el.addEventListener('render-target-loaded', () => {
-                    if (this.el.renderer) {
-                        this.el.renderer.setClearColor(0x000000, 0);
+                const scene = this.el;
+                const setTransparent = () => {
+                    if (scene.renderer) {
+                        scene.renderer.setClearColor(0x000000, 0);
                     }
-                });
-                this.el.addEventListener('enter-vr', () => {
-                    if (this.el.renderer) {
-                        this.el.renderer.setClearColor(0x000000, 0);
-                    }
-                });
+                };
+                scene.addEventListener('render-target-loaded', setTransparent);
+                scene.addEventListener('enter-vr', setTransparent);
             }
         });
     </script>
 
-    <a-scene webxr="optionalFeatures: anchors, unbounded; referenceSpaceType: local-floor;"
-             force-passthrough
+    <a-scene webxr="optionalFeatures: anchors, unbounded, local-floor; referenceSpaceType: local-floor;"
+             force-ar-passthrough
+             background="transparent: true"
              renderer="alpha: true; colorManagement: true; antialias: true;"
              xr-mode-ui="mode: ar"
              style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
