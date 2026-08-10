@@ -36,7 +36,7 @@
     <button id="custom-ar-btn">ENTER NOEMATA AR</button>
 
     <script>
-        // Force WebGL Canvas Transparency for Passthrough Video
+        // Force WebGL Canvas Transparency for Passthrough Video Feed
         AFRAME.registerComponent('force-ar-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -102,8 +102,8 @@
         });
     </script>
 
-    <!-- Native A-Frame WebXR Session configuration enables 6DoF room-scale movement -->
-    <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, anchors; referenceSpaceType: local-floor;"
+    <!-- Configure webxr system for local-floor 6DoF tracking -->
+    <a-scene webxr="optionalFeatures: hit-test, anchors, local-floor; referenceSpaceType: local-floor;"
              force-ar-passthrough
              background="transparent: true"
              noemata-spatial-manager
@@ -111,7 +111,7 @@
              xr-mode-ui="enabled: false"
              style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
         
-        <!-- Camera Rig with full 6DoF tracking -->
+        <!-- Camera Rig for 6DoF Room-Scale Movement -->
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
         </a-entity>
@@ -120,7 +120,7 @@
         <a-entity laser-controls="hand: left" raycaster="objects: .ui-button; far: 5;"></a-entity>
         <a-entity laser-controls="hand: right" raycaster="objects: .ui-button; far: 5;"></a-entity>
 
-        <!-- WORLD TERMINAL (Anchored at 0, 1.4, -1.5 in physical space) -->
+        <!-- WORLD TERMINAL: Floats 1.5m in front of physical spawn -->
         <a-entity id="world-terminal" position="0 1.4 -1.5">
             <a-cylinder radius="0.02" height="1.0" color="#1e293b" position="0 -0.5 0" material="shader: flat;"></a-cylinder>
             <a-plane width="1.4" height="0.75" color="#0d1117" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
@@ -210,17 +210,25 @@
             statusLabel.setAttribute('color', '#94a3b8');
         }
 
-        // Clean A-Frame WebXR Session Trigger (restores full 6DoF positional tracking)
+        // Trigger scene.enterAR() for A-Frame Native WebXR AR Passthrough Mode
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const sceneEl = document.querySelector('a-scene');
             const button = document.getElementById('custom-ar-btn');
 
+            const startAR = () => {
+                if (sceneEl.enterAR) {
+                    sceneEl.enterAR();
+                } else {
+                    sceneEl.enterVR();
+                }
+                button.style.display = 'none';
+            };
+
             if (sceneEl.hasLoaded) {
-                sceneEl.enterVR();
+                startAR();
             } else {
-                sceneEl.addEventListener('loaded', () => sceneEl.enterVR());
+                sceneEl.addEventListener('loaded', startAR);
             }
-            button.style.display = 'none';
         });
     </script>
 </body>
