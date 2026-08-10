@@ -34,7 +34,7 @@
             }
         });
 
-        // Hit-Testing Component & Controller Trigger Selection
+        // Spatial Hit-Testing Component
         AFRAME.registerComponent('noemata-spatial-manager', {
             init: function () {
                 this.xrHitTestSource = null;
@@ -58,7 +58,7 @@
                         this.refSpace = refSpace;
                     });
 
-                    // LISTEN FOR CONTROLLER TRIGGER TO LOCK SURFACE LOCATION
+                    // CONTROLLER TRIGGER PULL TO LOCK LOCATION
                     session.addEventListener('select', () => {
                         if (!window.isHoveringButton && window.latestHitPos && !window.isPosLocked) {
                             window.isPosLocked = true;
@@ -104,12 +104,11 @@
         });
     </script>
 
-    <!-- Native A-Frame WebXR setup handles the AR/VR entry trigger directly -->
     <a-scene webxr="requiredFeatures: hit-test; optionalFeatures: anchors, unbounded; referenceSpaceType: local-floor;"
              force-passthrough
              noemata-spatial-manager
              renderer="alpha: true; colorManagement: true; antialias: true;"
-             xr-mode-ui="enabled: true; mode: ar"
+             xr-mode-ui="mode: ar"
              style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
         
         <a-entity id="rig" position="0 0 0">
@@ -120,19 +119,20 @@
         <a-entity laser-controls="hand: left" raycaster="objects: .ui-button; far: 5;"></a-entity>
         <a-entity laser-controls="hand: right" raycaster="objects: .ui-button; far: 5;"></a-entity>
 
-        <!-- Original HUD UI -->
-        <a-entity id="hud-panel" position="0 1.4 -1.2" scale="0.9 0.9 0.9">
-            <a-plane width="1.05" height="0.5" color="#121620" opacity="0.95" material="shader:flat; depthTest: false;"></a-plane>
+        <!-- CLEANED UP HUD UI (POSITIONED AT COMFORTABLE -1.5M DISTANCE, EXPANDED FOR NO CLIPPING) -->
+        <a-entity id="hud-panel" position="0 1.4 -1.5" scale="1.0 1.0 1.0">
+            <a-plane width="1.3" height="0.65" color="#121620" opacity="0.95" material="shader:flat; depthTest: false;"></a-plane>
+            <a-plane width="1.34" height="0.69" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader:flat; depthTest: false;"></a-plane>
             
-            <a-text id="hud-device-label" value="TARGET: SMART CLIMATE NODE" color="#00f0ff" width="1.1" position="-0.48 0.17 0.02" font="monoid"></a-text>
-            <a-text id="hud-status-label" value="AIM AT HARDWARE & PULL TRIGGER TO LOCK" color="#64748b" width="0.8" position="-0.48 0.09 0.02" font="monoid"></a-text>
+            <a-text id="hud-device-label" value="TARGET: SMART CLIMATE NODE" color="#00f0ff" width="1.4" align="center" position="0 0.20 0.02" font="monoid" wrap-count="28"></a-text>
+            <a-text id="hud-status-label" value="AIM AT HARDWARE & PULL TRIGGER TO LOCK" color="#64748b" width="1.1" align="center" position="0 0.08 0.02" font="monoid" wrap-count="36"></a-text>
 
-            <a-plane class="ui-button" id="btn-toggle-device" width="0.4" height="0.12" color="#232d3f" position="-0.22 -0.08 0.03" material="shader:flat; depthTest: false;">
-                <a-text value="[ NEXT DEVICE ]" color="#00f0ff" width="0.9" align="center" position="0 0 0.01" font="monoid"></a-text>
+            <a-plane class="ui-button" id="btn-toggle-device" width="0.5" height="0.14" color="#232d3f" position="-0.3 -0.12 0.03" material="shader:flat; depthTest: false;">
+                <a-text value="[ NEXT DEVICE ]" color="#00f0ff" width="1.1" align="center" position="0 0 0.01" font="monoid"></a-text>
             </a-plane>
 
-            <a-plane class="ui-button" id="btn-save-device" width="0.4" height="0.12" color="#334155" position="0.22 -0.08 0.03" material="shader:flat; depthTest: false;">
-                <a-text id="save-btn-text" value="[ CREATE ANCHOR ]" color="#94a3b8" width="0.9" align="center" position="0 0 0.01" font="monoid"></a-text>
+            <a-plane class="ui-button" id="btn-save-device" width="0.5" height="0.14" color="#334155" position="0.3 -0.12 0.03" material="shader:flat; depthTest: false;">
+                <a-text id="save-btn-text" value="[ CREATE ANCHOR ]" color="#94a3b8" width="1.1" align="center" position="0 0 0.01" font="monoid"></a-text>
             </a-plane>
         </a-entity>
 
