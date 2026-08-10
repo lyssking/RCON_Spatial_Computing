@@ -102,7 +102,7 @@
         });
     </script>
 
-    <!-- Configure WebXR system for local-floor 6DoF tracking and Quest 3 hit testing -->
+    <!-- Configure WebXR system for local-floor 6DoF tracking -->
     <a-scene webxr="optionalFeatures: hit-test, anchors, local-floor; referenceSpaceType: local-floor;"
              force-ar-passthrough
              background="transparent: true"
@@ -111,21 +111,25 @@
              xr-mode-ui="enabled: false"
              style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
         
-        <!-- Camera Rig for 6DoF Room-Scale Movement -->
+        <!-- Camera Rig -->
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
         </a-entity>
 
-        <!-- Laser Controllers with Raycaster targeting UI buttons -->
-        <a-entity id="left-controller" laser-controls="hand: left" raycaster="objects: .ui-button; far: 5;"></a-entity>
-        <a-entity id="right-controller" laser-controls="hand: right" raycaster="objects: .ui-button; far: 5;"></a-entity>
+        <!-- Invisible Surface Capture Plane for Trigger Clicks -->
+        <a-plane class="surface-target" position="0 0 0" rotation="-90 0 0" width="100" height="100" visible="false"></a-plane>
 
-        <!-- WORLD-ANCHORED CONTROL TERMINAL: Styled cybernetic panel -->
+        <!-- Laser Controllers targeting buttons and room surfaces -->
+        <a-entity id="left-controller" laser-controls="hand: left" raycaster="objects: .ui-button; far: 5;"></a-entity>
+        <a-entity id="right-controller" laser-controls="hand: right" raycaster="objects: .ui-button, .surface-target; far: 10;"></a-entity>
+
+        <!-- WORLD TERMINAL PANEL -->
         <a-entity id="world-terminal" position="0 1.4 -1.5">
             <a-cylinder radius="0.015" height="0.9" color="#1e293b" position="0 -0.45 0" material="shader: flat;"></a-cylinder>
             
-            <a-plane width="1.1" height="0.55" color="#121620" opacity="0.95" material="shader: flat; depthTest: true;"></a-plane>
-            <a-plane width="1.14" height="0.59" color="#00f0ff" opacity="0.4" position="0 0 -0.005" material="shader: flat; depthTest: true;"></a-plane>
+            <!-- Background Planes (Raycaster ignored to remove weird connecting lines) -->
+            <a-plane width="1.1" height="0.55" color="#121620" opacity="0.95" material="shader: flat; depthTest: true;" raycaster="far: 0"></a-plane>
+            <a-plane width="1.14" height="0.59" color="#00f0ff" opacity="0.4" position="0 0 -0.005" material="shader: flat; depthTest: true;" raycaster="far: 0"></a-plane>
 
             <a-text id="hud-device-label" 
                     value="TARGET: SMART CLIMATE NODE" 
@@ -156,7 +160,7 @@
             </a-plane>
         </a-entity>
 
-        <!-- Hit-Test Room Surface Placement Ring -->
+        <!-- Hit-Test Placement Preview Ring -->
         <a-entity id="placement-preview" visible="false">
             <a-ring radius-inner="0.08" radius-outer="0.1" color="#39ff14" rotation="-90 0 0" material="shader: flat; depthTest: true;"></a-ring>
             <a-box size="0.12" material="color: #39ff14; wireframe: true; depthTest: true;" position="0 0.06 0"></a-box>
@@ -184,7 +188,6 @@
         const saveBtn = document.getElementById('btn-save-device');
         const saveBtnText = document.getElementById('save-btn-text');
 
-        // Track when laser is pointing at terminal buttons
         [toggleBtn, saveBtn].forEach(btn => {
             btn.addEventListener('raycaster-intersected', () => { isHoveringButton = true; });
             btn.addEventListener('raycaster-intersected-cleared', () => { isHoveringButton = false; });
@@ -213,7 +216,6 @@
                     const anchor = await spatialComp.lastHitResult.createAnchor();
                     if (anchor && anchor.requestPersistentHandle) {
                         anchorUUID = await anchor.requestPersistentHandle();
-                        console.log(`[META OS ANCHOR PERSISTED] Handle: ${anchorUUID}`);
                     }
                 }
             } catch (err) {
@@ -237,24 +239,22 @@
             });
         });
 
-        // LISTEN FOR CONTROLLER TRIGGER PULL TO LOCK HIT LOCATION ON SCANNED ROOM MESH
-        document.querySelector('a-scene').addEventListener('enter-vr', () => {
-            const session = document.querySelector('a-scene').xrSession;
-            if (session) {
-                session.addEventListener('select', () => {
-                    // Only lock position if trigger is pulled in open space (not clicking terminal buttons)
-                    if (!isHoveringButton && window.latestHitPos && !window.isPosLocked) {
-                        window.isPosLocked = true;
-                        lockedCoords = { ...window.latestHitPos };
+        // Click trigger on controllers locks target coordinates
+        const registerTriggerLock = () => {
+            const sceneEl = document.querySelector('a-scene');
+            
+            sceneEl.addEventListener('click', (e) => {
+                if (!isHoveringButton && window.latestHitPos && !window.isPosLocked) {
+                    window.isPosLocked = true;
+                    lockedCoords = { ...window.latestHitPos };
 
-                        statusLabel.setAttribute('value', 'SURFACE LOCKED! CLICK ANCHOR NOW.');
-                        statusLabel.setAttribute('color', '#39ff14');
-                        saveBtn.setAttribute('color', '#00f0ff');
-                        saveBtnText.setAttribute('color', '#000000');
-                    }
-                });
-            }
-        });
+                    statusLabel.setAttribute('value', 'SURFACE LOCKED! CLICK ANCHOR NOW.');
+                    statusLabel.setAttribute('color', '#39ff14');
+                    saveBtn.setAttribute('color', '#00f0ff');
+                    saveBtnText.setAttribute('color', '#000000');
+                }
+            });
+        };
 
         function resetLock() {
             window.isPosLocked = false;
@@ -265,7 +265,6 @@
             statusLabel.setAttribute('color', '#64748b');
         }
 
-        // Trigger scene.enterAR() for Native WebXR AR Passthrough Mode
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const sceneEl = document.querySelector('a-scene');
             const button = document.getElementById('custom-ar-btn');
@@ -277,6 +276,7 @@
                     sceneEl.enterVR();
                 }
                 button.style.display = 'none';
+                registerTriggerLock();
             };
 
             if (sceneEl.hasLoaded) {
