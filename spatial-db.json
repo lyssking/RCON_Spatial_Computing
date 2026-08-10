@@ -1,0 +1,23 @@
+{
+  "smart_climate_node": {
+    "x": "-1.07",
+    "y": "1.28",
+    "z": "1.23",
+    "anchorUUID": null,
+    "updatedAt": "2026-08-10T18:15:43.156Z"
+  },
+  "perimeter_monitor": {
+    "x": "0.68",
+    "y": "0.09",
+    "z": "-1.42",
+    "anchorUUID": null,
+    "updatedAt": "2026-08-10T18:16:05.912Z"
+  },
+  "smart_power_relay": {
+    "x": "-1.38",
+    "y": "1.07",
+    "z": "-1.41",
+    "anchorUUID": null,
+    "updatedAt": "2026-08-10T18:15:34.687Z"
+  }
+}
