@@ -109,27 +109,28 @@
              style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
         
         <a-entity id="rig" position="0 0 0">
-            <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
+            <!-- Set camera near clipping plane to 0.1 so close items don't distort stereoscopic rendering -->
+            <a-entity id="main-camera" camera="near: 0.1; far: 1000;" position="0 1.6 0" look-controls></a-entity>
         </a-entity>
 
         <a-entity laser-controls="hand: left" raycaster="objects: .ui-button; far: 5;"></a-entity>
         <a-entity laser-controls="hand: right" raycaster="objects: .ui-button; far: 5;"></a-entity>
 
-        <!-- UPDATED HUD PANEL: Scaled larger, moved further back (-1.8m), padded text boundaries -->
-        <a-entity id="hud-panel" position="0 1.5 -1.8" scale="1.2 1.2 1.2">
+        <!-- STEREO COMFORT FIX: Positioned at comfortable -2.2m distance with depthTest enabled -->
+        <a-entity id="hud-panel" position="0 1.5 -2.2" scale="1.1 1.1 1.1">
             <!-- Background Panel -->
-            <a-plane width="1.6" height="0.8" color="#0d1117" opacity="0.92" material="shader:flat; depthTest: false;"></a-plane>
+            <a-plane width="1.8" height="0.9" color="#0d1117" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
             
             <!-- Border Glow Frame -->
-            <a-plane width="1.64" height="0.84" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader:flat; depthTest: false;"></a-plane>
+            <a-plane width="1.84" height="0.94" color="#00f0ff" opacity="0.25" position="0 0 -0.01" material="shader: flat; depthTest: true;"></a-plane>
 
             <!-- Device Title Header -->
             <a-text id="hud-device-label" 
                     value="TARGET: SMART CLIMATE NODE" 
                     color="#00f0ff" 
                     align="center"
-                    width="2.2" 
-                    position="0 0.28 0.02" 
+                    width="2.4" 
+                    position="0 0.3 0.02" 
                     font="monoid"
                     wrap-count="28">
             </a-text>
@@ -139,26 +140,26 @@
                     value="AIM AT HARDWARE & PULL TRIGGER TO LOCK" 
                     color="#94a3b8" 
                     align="center"
-                    width="1.8" 
+                    width="2.0" 
                     position="0 0.12 0.02" 
                     font="monoid"
                     wrap-count="36">
             </a-text>
 
             <!-- Next Device Button -->
-            <a-plane class="ui-button" id="btn-toggle-device" width="0.65" height="0.18" color="#1e293b" position="-0.4 -0.18 0.03" material="shader:flat; depthTest: false;">
-                <a-text value="[ NEXT DEVICE ]" color="#00f0ff" width="1.5" align="center" position="0 0 0.01" font="monoid"></a-text>
+            <a-plane class="ui-button" id="btn-toggle-device" width="0.75" height="0.2" color="#1e293b" position="-0.45 -0.22 0.03" material="shader: flat; depthTest: true;">
+                <a-text value="[ NEXT DEVICE ]" color="#00f0ff" width="1.6" align="center" position="0 0 0.01" font="monoid"></a-text>
             </a-plane>
 
             <!-- Save Anchor Button -->
-            <a-plane class="ui-button" id="btn-save-device" width="0.65" height="0.18" color="#334155" position="0.4 -0.18 0.03" material="shader:flat; depthTest: false;">
-                <a-text id="save-btn-text" value="[ CREATE ANCHOR ]" color="#94a3b8" width="1.5" align="center" position="0 0 0.01" font="monoid"></a-text>
+            <a-plane class="ui-button" id="btn-save-device" width="0.75" height="0.2" color="#334155" position="0.45 -0.22 0.03" material="shader: flat; depthTest: true;">
+                <a-text id="save-btn-text" value="[ CREATE ANCHOR ]" color="#94a3b8" width="1.6" align="center" position="0 0 0.01" font="monoid"></a-text>
             </a-plane>
         </a-entity>
 
         <a-entity id="placement-preview" visible="false">
-            <a-ring radius-inner="0.08" radius-outer="0.1" color="#39ff14" rotation="-90 0 0" material="shader: flat; depthTest: false;"></a-ring>
-            <a-box size="0.12" material="color: #39ff14; wireframe: true; depthTest: false;" position="0 0.06 0"></a-box>
+            <a-ring radius-inner="0.08" radius-outer="0.1" color="#39ff14" rotation="-90 0 0" material="shader: flat; depthTest: true;"></a-ring>
+            <a-box size="0.12" material="color: #39ff14; wireframe: true; depthTest: true;" position="0 0.06 0"></a-box>
         </a-entity>
 
     </a-scene>
