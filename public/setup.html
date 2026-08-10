@@ -34,7 +34,7 @@
             }
         });
 
-        // Hit-Testing Component with Surface Selection Listener
+        // Hit-Testing Component & Controller Surface Lock
         AFRAME.registerComponent('noemata-spatial-manager', {
             init: function () {
                 this.xrHitTestSource = null;
@@ -59,7 +59,7 @@
                     });
 
                     // TRIGGER PULL LISTENER FOR SURFACE LOCKING
-                    session.addEventListener('select', (evt) => {
+                    session.addEventListener('select', () => {
                         if (!window.isHoveringButton && window.latestHitPos && !window.isPosLocked) {
                             window.isPosLocked = true;
                             window.lockedCoords = { ...window.latestHitPos };
@@ -104,6 +104,7 @@
         });
     </script>
 
+    <!-- Uses A-Frame native xr-mode-ui for native AR button initialization -->
     <a-scene webxr="requiredFeatures: hit-test; optionalFeatures: anchors, unbounded; referenceSpaceType: local-floor;"
              force-passthrough
              noemata-spatial-manager
@@ -115,11 +116,11 @@
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
         </a-entity>
 
-        <!-- Laser Controllers -->
+        <!-- Laser Controllers targeting buttons -->
         <a-entity laser-controls="hand: left" raycaster="objects: .ui-button; far: 5;"></a-entity>
         <a-entity laser-controls="hand: right" raycaster="objects: .ui-button; far: 5;"></a-entity>
 
-        <!-- Original Comfortable HUD UI -->
+        <!-- Original HUD UI -->
         <a-entity id="hud-panel" position="0 1.4 -1.2" scale="0.9 0.9 0.9">
             <a-plane width="1.05" height="0.5" color="#121620" opacity="0.95" material="shader:flat; depthTest: false;"></a-plane>
             
