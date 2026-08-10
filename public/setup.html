@@ -13,12 +13,30 @@
             margin: 0; padding: 0; overflow: hidden;
             width: 100%; height: 100%;
         }
+        #custom-ar-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 99999;
+            padding: 14px 24px;
+            background: #00f0ff;
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+        }
     </style>
 </head>
-<body style="margin: 0; overflow: hidden; background-color: transparent !important; background: transparent !important;">
+<body style="margin: 0; overflow: hidden; background: transparent !important;">
+
+    <button id="custom-ar-btn">ENTER NOEMATA AR</button>
 
     <script>
-        // Force WebGL Canvas Transparency for AR Passthrough
+        // Force WebGL Canvas Transparency
         AFRAME.registerComponent('force-ar-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -32,13 +50,12 @@
             }
         });
 
-        // Safe Hit-Testing & Spatial Anchor Manager
+        // Hit-Testing Component
         AFRAME.registerComponent('noemata-spatial-manager', {
             init: function () {
                 this.xrHitTestSource = null;
                 this.viewerSpace = null;
                 this.refSpace = null;
-                this.lastHitResult = null;
                 this.previewEl = document.getElementById('placement-preview');
 
                 this.el.sceneEl.addEventListener('enter-vr', () => {
@@ -49,7 +66,7 @@
                         this.viewerSpace = refSpace;
                         session.requestHitTestSource({ space: this.viewerSpace }).then((source) => {
                             this.xrHitTestSource = source;
-                        }).catch(e => console.log('Hit test unavailable:', e));
+                        }).catch(e => console.log('Hit-test source unavailable:', e));
                     }).catch(e => console.log('Viewer space error:', e));
 
                     session.requestReferenceSpace('local-floor').catch(() => {
@@ -85,13 +102,11 @@
         });
     </script>
 
-    <a-scene webxr="optionalFeatures: hit-test, anchors, unbounded, local-floor; referenceSpaceType: local-floor;"
+    <a-scene webxr="optionalFeatures: hit-test, local-floor; referenceSpaceType: local-floor;"
              force-ar-passthrough
-             background="transparent: true"
              noemata-spatial-manager
-             renderer="alpha: true; colorManagement: true; antialias: true;"
-             xr-mode-ui="mode: ar"
-             style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
+             renderer="alpha: true; colorManagement: true;"
+             xr-mode-ui="enabled: false">
         
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
@@ -134,18 +149,11 @@
         ];
         let currentDeviceIndex = 0;
         let lockedCoords = null;
-        let isHoveringButton = false;
 
         const deviceLabel = document.getElementById('hud-device-label');
         const statusLabel = document.getElementById('hud-status-label');
         const toggleBtn = document.getElementById('btn-toggle-device');
         const saveBtn = document.getElementById('btn-save-device');
-        const saveBtnText = document.getElementById('save-btn-text');
-
-        [toggleBtn, saveBtn].forEach(btn => {
-            btn.addEventListener('raycaster-intersected', () => { isHoveringButton = true; });
-            btn.addEventListener('raycaster-intersected-cleared', () => { isHoveringButton = false; });
-        });
 
         toggleBtn.addEventListener('click', () => {
             currentDeviceIndex = (currentDeviceIndex + 1) % devices.length;
@@ -153,72 +161,40 @@
             resetLock();
         });
 
-        saveBtn.addEventListener('click', async () => {
+        saveBtn.addEventListener('click', () => {
             if (!lockedCoords) return;
-
-            const sceneEl = document.querySelector('a-scene');
-            const spatialComp = sceneEl.components['noemata-spatial-manager'];
             const activeKey = devices[currentDeviceIndex].key;
-
-            statusLabel.setAttribute('value', 'LOCKING ANCHOR TO META OS...');
-            statusLabel.setAttribute('color', '#00f0ff');
-
-            let anchorUUID = null;
-
-            try {
-                if (spatialComp && spatialComp.lastHitResult && spatialComp.lastHitResult.createAnchor) {
-                    const anchor = await spatialComp.lastHitResult.createAnchor();
-                    if (anchor && anchor.requestPersistentHandle) {
-                        anchorUUID = await anchor.requestPersistentHandle();
-                        console.log(`[META OS ANCHOR PERSISTED] Handle: ${anchorUUID}`);
-                    }
-                }
-            } catch (err) {
-                console.warn("[Anchor Persist Warning] Saving raw position fallback:", err);
-            }
 
             fetch('/api/spatial/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    deviceId: activeKey, 
-                    position: lockedCoords,
-                    anchorUUID: anchorUUID 
-                })
+                body: JSON.stringify({ deviceId: activeKey, position: lockedCoords })
             })
             .then(res => res.json())
             .then(() => {
-                statusLabel.setAttribute('value', `SAVED ${activeKey.toUpperCase()} TO META OS!`);
+                statusLabel.setAttribute('value', `SAVED ${activeKey.toUpperCase()}!`);
                 statusLabel.setAttribute('color', '#39ff14');
                 setTimeout(() => resetLock(), 1800);
             });
         });
 
-        document.querySelector('a-scene').addEventListener('enter-vr', () => {
-            const session = document.querySelector('a-scene').xrSession;
-            if (session) {
-                session.addEventListener('select', () => {
-                    if (!isHoveringButton && window.latestHitPos && !window.isPosLocked) {
-                        window.isPosLocked = true;
-                        lockedCoords = { ...window.latestHitPos };
-
-                        statusLabel.setAttribute('value', `SURFACE LOCKED! CLICK ANCHOR NOW.`);
-                        statusLabel.setAttribute('color', '#39ff14');
-                        saveBtn.setAttribute('color', '#00f0ff');
-                        saveBtnText.setAttribute('color', '#000000');
-                    }
-                });
-            }
-        });
-
         function resetLock() {
             window.isPosLocked = false;
             lockedCoords = null;
-            saveBtn.setAttribute('color', '#334155');
-            saveBtnText.setAttribute('color', '#94a3b8');
             statusLabel.setAttribute('value', 'AIM AT HARDWARE & PULL TRIGGER TO LOCK');
             statusLabel.setAttribute('color', '#64748b');
         }
+
+        // Native Native Custom Button Listener
+        document.getElementById('custom-ar-btn').addEventListener('click', () => {
+            const sceneEl = document.querySelector('a-scene');
+            if (sceneEl.hasLoaded) {
+                sceneEl.enterVR();
+            } else {
+                sceneEl.addEventListener('loaded', () => sceneEl.enterVR());
+            }
+            document.getElementById('custom-ar-btn').style.display = 'none';
+        });
     </script>
 </body>
 </html>
