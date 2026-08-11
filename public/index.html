@@ -50,7 +50,6 @@
         });
     </script>
 
-    <!-- FIXED WEBXR SESSION CONFIGURATION FOR QUEST PASSTHROUGH -->
     <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: anchors, unbounded; referenceSpaceType: local-floor;"
              force-passthrough
              renderer="alpha: true; colorManagement: true; antialias: true;"
@@ -69,14 +68,14 @@
             </a-entity>
         </a-entity>
 
-        <!-- World Mesh Parent Entity (Auto-aligned via saved matrix on startup) -->
+        <!-- World Mesh Parent Entity (Transformed by Saved DB Matrix) -->
         <a-entity id="world-mesh" position="0 0 0">
 
             <!-- 1. SMART CLIMATE NODE -->
             <a-entity class="gaze-target" id="smart-climate-asset"
                       geometry="primitive: box; width: 0.16; height: 0.16; depth: 0.16" 
                       material="color: #00f0ff; wireframe: true; opacity: 0.85" 
-                      position="0 -10 0">
+                      position="0 1.4 -1.2">
                 
                 <a-text value="[ NOEMATA // CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
 
@@ -91,7 +90,7 @@
             <a-entity class="gaze-target" id="perimeter-monitor-asset"
                       geometry="primitive: cylinder; radius: 0.12; height: 0.18" 
                       material="color: #00f0ff; wireframe: true; opacity: 0.85" 
-                      position="0 -10 0">
+                      position="-0.5 1.4 -1.5">
                 
                 <a-text value="[ NOEMATA // PERIMETER GUARD ]" position="0 0.2 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
 
@@ -106,7 +105,7 @@
             <a-entity class="gaze-target" id="smart-relay-asset"
                       geometry="primitive: box; width: 0.15; height: 0.15; depth: 0.15" 
                       material="color: #64748b; wireframe: true; opacity: 0.85" 
-                      position="0 -10 0">
+                      position="0.5 1.4 -1.5">
                 
                 <a-text value="[ NOEMATA // POWER RELAY ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
 
@@ -124,26 +123,8 @@
     <script>
         const socket = io();
 
-        // Automatic Localize on Page Load (Zero Taps Required)
-        fetch('/api/spatial/map')
-            .then(res => res.json())
-            .then(db => {
-                // 1. Auto-apply Saved Spatial Calibration Matrix
-                if (db.matrix) {
-                    const worldMesh = document.getElementById('world-mesh');
-                    if (db.matrix.position) worldMesh.object3D.position.copy(db.matrix.position);
-                    if (db.matrix.quaternion) worldMesh.object3D.quaternion.copy(db.matrix.quaternion);
-                    console.log("[NOEMATA AUTO-LOCALIZED] Saved spatial matrix applied.");
-                }
-
-                // 2. Render Hardware Anchors
-                if (db.anchors) {
-                    applyRegisteredAnchors(db.anchors);
-                }
-            })
-            .catch(err => console.error("Map Fetch Error:", err));
-
         function applyRegisteredAnchors(map) {
+            if (!map) return;
             const targets = [
                 { key: 'smart_climate_node', elementId: 'smart-climate-asset' },
                 { key: 'perimeter_monitor', elementId: 'perimeter-monitor-asset' },
@@ -153,11 +134,31 @@
             targets.forEach(item => {
                 const data = map[item.key];
                 const el = document.getElementById(item.elementId);
-                if (data && el) {
+                if (data && el && data.x !== undefined) {
                     el.setAttribute('position', `${data.x} ${data.y} ${data.z}`);
+                    console.log(`[NODE APPLIED] ${item.key}: (${data.x}, ${data.y}, ${data.z})`);
                 }
             });
         }
+
+        // Fetch DB Map & Auto-Localize
+        fetch('/api/spatial/map')
+            .then(res => res.json())
+            .then(db => {
+                // 1. Apply Saved Matrix to Parent Room Entity
+                if (db.matrix) {
+                    const worldMesh = document.getElementById('world-mesh');
+                    if (db.matrix.position) worldMesh.object3D.position.copy(db.matrix.position);
+                    if (db.matrix.quaternion) worldMesh.object3D.quaternion.copy(db.matrix.quaternion);
+                    worldMesh.object3D.updateMatrixWorld(true);
+                    console.log("[NOEMATA MATRIX APPLIED]", db.matrix);
+                }
+
+                // 2. Apply Saved Anchors (Handles both db.anchors or flat map structure)
+                const anchorMap = db.anchors || db;
+                applyRegisteredAnchors(anchorMap);
+            })
+            .catch(err => console.error("Map Fetch Error:", err));
 
         socket.on('spatialAnchorsUpdated', (anchors) => applyRegisteredAnchors(anchors));
 
@@ -165,6 +166,7 @@
             const worldMesh = document.getElementById('world-mesh');
             if (matrix.position) worldMesh.object3D.position.copy(matrix.position);
             if (matrix.quaternion) worldMesh.object3D.quaternion.copy(matrix.quaternion);
+            worldMesh.object3D.updateMatrixWorld(true);
         });
 
         // Hover gaze interaction for popup cards
@@ -236,19 +238,13 @@
             const button = document.getElementById('custom-ar-btn');
 
             const launch = () => {
-                if (sceneEl.enterAR) {
-                    sceneEl.enterAR();
-                } else if (sceneEl.enterVR) {
-                    sceneEl.enterVR();
-                }
+                if (sceneEl.enterAR) sceneEl.enterAR();
+                else if (sceneEl.enterVR) sceneEl.enterVR();
                 button.style.display = 'none';
             };
 
-            if (sceneEl.hasLoaded) {
-                launch();
-            } else {
-                sceneEl.addEventListener('loaded', launch);
-            }
+            if (sceneEl.hasLoaded) launch();
+            else sceneEl.addEventListener('loaded', launch);
         });
     </script>
 </body>
