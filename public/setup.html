@@ -6,7 +6,6 @@
     <title>NOEMATA // SPATIAL ANCHOR SETUP</title>
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="/js/aligner.js"></script>
     <style>
         html, body, .a-canvas {
             background-color: transparent !important;
@@ -37,6 +36,60 @@
     <button id="custom-ar-btn">ENTER NOEMATA AR SETUP</button>
 
     <script>
+        // INLINED ALIGNER LOGIC
+        window.alignSceneToPoints = function (livePoints, referencePoints, targetEntity) {
+            if (!livePoints || !referencePoints || livePoints.length < 3 || referencePoints.length < 3) return;
+
+            try {
+                const pLive = livePoints.map(p => new THREE.Vector3(parseFloat(p.x), parseFloat(p.y), parseFloat(p.z)));
+                const pRef = referencePoints.map(p => new THREE.Vector3(parseFloat(p.x), parseFloat(p.y), parseFloat(p.z)));
+
+                const liveOrigin = pLive[0].clone();
+                const refOrigin = pRef[0].clone();
+
+                const dirLiveX = new THREE.Vector3().subVectors(pLive[1], liveOrigin).normalize();
+                const dirRefX = new THREE.Vector3().subVectors(pRef[1], refOrigin).normalize();
+
+                const dirLive3 = new THREE.Vector3().subVectors(pLive[2], liveOrigin).normalize();
+                const dirRef3 = new THREE.Vector3().subVectors(pRef[2], refOrigin).normalize();
+
+                const normalLive = new THREE.Vector3().crossVectors(dirLiveX, dirLive3).normalize();
+                const normalRef = new THREE.Vector3().crossVectors(dirRefX, dirRef3).normalize();
+
+                const dirLiveY = new THREE.Vector3().crossVectors(normalLive, dirLiveX).normalize();
+                const dirRefY = new THREE.Vector3().crossVectors(normalRef, dirRefX).normalize();
+
+                const mLive = new THREE.Matrix4().set(
+                    dirLiveX.x, dirLiveY.x, normalLive.x, 0,
+                    dirLiveX.y, dirLiveY.y, normalLive.y, 0,
+                    dirLiveX.z, dirLiveY.z, normalLive.z, 0,
+                    0, 0, 0, 1
+                );
+
+                const mRef = new THREE.Matrix4().set(
+                    dirRefX.x, dirRefY.x, normalRef.x, 0,
+                    dirRefX.y, dirRefY.y, normalRef.y, 0,
+                    dirRefX.z, dirRefY.z, normalRef.z, 0,
+                    0, 0, 0, 1
+                );
+
+                const mLiveInv = new THREE.Matrix4().copy(mLive).invert();
+                const mRotation = new THREE.Matrix4().multiplyMatrices(mRef, mLiveInv);
+
+                const quaternion = new THREE.Quaternion().setFromRotationMatrix(mRotation);
+                const rotatedLiveOrigin = liveOrigin.clone().applyQuaternion(quaternion);
+                const translation = refOrigin.clone().sub(rotatedLiveOrigin);
+
+                targetEntity.object3D.position.copy(translation);
+                targetEntity.object3D.quaternion.copy(quaternion);
+                targetEntity.object3D.updateMatrixWorld(true);
+
+                console.log("[ALIGNMENT SUCCESS] Matrix applied.");
+            } catch (err) {
+                console.error("[ALIGNMENT ERROR]", err);
+            }
+        };
+
         AFRAME.registerComponent('force-ar-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -173,7 +226,7 @@
         <a-entity laser-controls="hand: left" raycaster="objects: .ui-button; far: 5;"></a-entity>
         <a-entity laser-controls="hand: right" raycaster="objects: .ui-button; far: 5;"></a-entity>
 
-        <!-- FLOATING HUD TERMINAL (NO VERTICAL BAR) -->
+        <!-- FLOATING HUD TERMINAL -->
         <a-entity id="world-terminal" position="0 1.4 -1.5">
             <a-plane width="1.4" height="0.75" color="#0d1117" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
             <a-plane width="1.44" height="0.79" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader: flat; depthTest: true;"></a-plane>
