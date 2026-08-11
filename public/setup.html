@@ -76,16 +76,10 @@
 
                     // TRIGGER SELECTION LISTENER
                     session.addEventListener('select', () => {
-                        // Ignore button laser clicks or missing hit positions
                         if (window.isHoveringButton || !window.latestHitPos) return;
 
-                        // STAGE 1: LANDMARK ALIGNMENT (Steps 0, 1, 2)
+                        // STAGE 1: LANDMARK ALIGNMENT (Taps 0, 1, 2)
                         if (window.alignmentStep < 3) {
-                            if (!window.storedRefPoints || window.storedRefPoints.length < 3) {
-                                console.warn("[SETUP] Landmarks JSON not loaded yet!");
-                                return;
-                            }
-
                             window.capturedLivePoints.push({ ...window.latestHitPos });
                             window.alignmentStep++;
 
@@ -96,17 +90,16 @@
                                 statusLabel.setAttribute('value', `TAP ${window.alignmentStep + 1}: ${nextLandmark}`);
                                 statusLabel.setAttribute('color', '#00f0ff');
                             } else {
-                                // 3 points collected -> Execute Matrix Alignment!
                                 statusLabel.setAttribute('value', 'ALIGNED! AIM AT HARDWARE & PULL TRIGGER');
                                 statusLabel.setAttribute('color', '#39ff14');
 
                                 const roomEntity = document.getElementById('world-mesh');
                                 window.alignSceneToPoints(window.capturedLivePoints, window.storedRefPoints, roomEntity);
                             }
-                            return; // Stop here during alignment steps
+                            return;
                         }
 
-                        // STAGE 2: HARDWARE ANCHOR PLACEMENT (Only unlocked AFTER alignment)
+                        // STAGE 2: HARDWARE ANCHOR PLACEMENT
                         if (!window.isPosLocked) {
                             window.isPosLocked = true;
                             window.lockedCoords = { ...window.latestHitPos };
@@ -168,9 +161,8 @@
         <a-entity laser-controls="hand: left" raycaster="objects: .ui-button; far: 5;"></a-entity>
         <a-entity laser-controls="hand: right" raycaster="objects: .ui-button; far: 5;"></a-entity>
 
+        <!-- FLOATING HUD TERMINAL (VERTICAL BAR REMOVED) -->
         <a-entity id="world-terminal" position="0 1.4 -1.5">
-            <a-cylinder radius="0.015" height="0.9" color="#1e293b" position="0 -0.45 0" material="shader: flat; depthTest: true;"></a-cylinder>
-            
             <a-plane width="1.4" height="0.75" color="#0d1117" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
             <a-plane width="1.44" height="0.79" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader: flat; depthTest: true;"></a-plane>
 
@@ -185,8 +177,8 @@
             </a-text>
 
             <a-text id="hud-status-label" 
-                    value="LOADING LANDMARKS..." 
-                    color="#ffaa00" 
+                    value="TAP 1: CARPET CORNER" 
+                    color="#00f0ff" 
                     align="center" 
                     width="1.5" 
                     position="0 0.08 0.02" 
@@ -217,30 +209,14 @@
         window.lockedCoords = null;
         window.isHoveringButton = false;
 
-        window.storedRefPoints = [];
+        // INLINED RECAP LANDMARK COORDINATES (Zero external file dependencies)
+        window.storedRefPoints = [
+            { "id": "ref_point_1", "label": "Carpet Corner", "x": 0.000, "y": 0.000, "z": 0.000 },
+            { "id": "ref_point_2", "label": "Cabinet Corner", "x": -1.088, "y": 0.838, "z": 0.190 },
+            { "id": "ref_point_3", "label": "Desk Corner", "x": 1.499, "y": 0.603, "z": 2.494 }
+        ];
         window.capturedLivePoints = [];
         window.alignmentStep = 0;
-
-        const statusLabel = document.getElementById('hud-status-label');
-
-        // Load reference landmarks and unlock alignment stage
-        fetch('/models/reference-landmarks.json')
-            .then(res => res.json())
-            .then(data => { 
-                window.storedRefPoints = data; 
-                if (data && data.length >= 3) {
-                    statusLabel.setAttribute('value', `TAP 1: ${data[0].label.toUpperCase()}`);
-                    statusLabel.setAttribute('color', '#00f0ff');
-                } else {
-                    statusLabel.setAttribute('value', 'ERROR: LANDMARK JSON INVALID');
-                    statusLabel.setAttribute('color', '#ff0055');
-                }
-            })
-            .catch(err => {
-                console.error("Landmark Fetch Error:", err);
-                statusLabel.setAttribute('value', 'ERROR: COULD NOT LOAD LANDMARKS');
-                statusLabel.setAttribute('color', '#ff0055');
-            });
 
         const devices = [
             { key: 'smart_climate_node', label: 'TARGET: SMART CLIMATE NODE' },
@@ -250,6 +226,7 @@
         let currentDeviceIndex = 0;
 
         const deviceLabel = document.getElementById('hud-device-label');
+        const statusLabel = document.getElementById('hud-status-label');
         const toggleBtn = document.getElementById('btn-toggle-device');
         const saveBtn = document.getElementById('btn-save-device');
         const saveBtnText = document.getElementById('save-btn-text');
