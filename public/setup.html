@@ -36,7 +36,6 @@
     <button id="custom-ar-btn">ENTER NOEMATA AR SETUP</button>
 
     <script>
-        // INLINED ALIGNER LOGIC
         window.alignSceneToPoints = function (livePoints, referencePoints, targetEntity) {
             if (!livePoints || !referencePoints || livePoints.length < 3 || referencePoints.length < 3) return;
 
@@ -131,7 +130,7 @@
                     session.addEventListener('select', () => {
                         if (window.isHoveringButton || !window.latestHitPos) return;
 
-                        // STAGE 1: ONE-TIME LANDMARK ALIGNMENT (Taps 0, 1, 2)
+                        // STAGE 1: LANDMARK ALIGNMENT (Taps 0, 1, 2)
                         if (window.alignmentStep < 3) {
                             window.capturedLivePoints.push({ ...window.latestHitPos });
                             window.alignmentStep++;
@@ -167,7 +166,21 @@
                         // STAGE 2: HARDWARE ANCHOR PLACEMENT
                         if (!window.isPosLocked) {
                             window.isPosLocked = true;
-                            window.lockedCoords = { ...window.latestHitPos };
+
+                            // CONVERT WORLD HIT POSITION TO LOCAL ROOM MESH COORDINATES
+                            const roomEntity = document.getElementById('world-mesh');
+                            const worldVec = new THREE.Vector3(
+                                parseFloat(window.latestHitPos.x),
+                                parseFloat(window.latestHitPos.y),
+                                parseFloat(window.latestHitPos.z)
+                            );
+                            const localVec = roomEntity.object3D.worldToLocal(worldVec);
+
+                            window.lockedCoords = {
+                                x: localVec.x.toFixed(3),
+                                y: localVec.y.toFixed(3),
+                                z: localVec.z.toFixed(3)
+                            };
 
                             const statusLabel = document.getElementById('hud-status-label');
                             const saveBtn = document.getElementById('btn-save-device');
