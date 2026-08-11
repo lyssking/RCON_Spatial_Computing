@@ -1,0 +1,23 @@
+[
+  {
+    "id": "ref_point_1",
+    "label": "Carpet Corner",
+    "x": 0.000,
+    "y": 0.000,
+    "z": 0.000
+  },
+  {
+    "id": "ref_point_2",
+    "label": "Cabinet Corner",
+    "x": -1.088,
+    "y": 0.838,
+    "z": 0.190
+  },
+  {
+    "id": "ref_point_3",
+    "label": "Desk Corner",
+    "x": 1.499,
+    "y": 0.603,
+    "z": 2.494
+  }
+]

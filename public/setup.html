@@ -6,6 +6,7 @@
     <title>NOEMATA // SPATIAL ANCHOR SETUP</title>
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/aligner.js"></script>
     <style>
         html, body, .a-canvas {
             background-color: transparent !important;
@@ -36,7 +37,6 @@
     <button id="custom-ar-btn">ENTER NOEMATA AR</button>
 
     <script>
-        // Force WebGL Canvas Transparency for AR Passthrough Mode
         AFRAME.registerComponent('force-ar-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -50,21 +50,17 @@
             }
         });
 
-        // Hit-Testing & Spatial Mesh Anchor Component
         AFRAME.registerComponent('noemata-spatial-manager', {
             init: function () {
                 this.xrHitTestSource = null;
                 this.viewerSpace = null;
                 this.refSpace = null;
-                this.lastHitResult = null;
                 this.previewEl = document.getElementById('placement-preview');
-                this.roomMeshEl = document.getElementById('room-mesh');
 
                 this.el.sceneEl.addEventListener('enter-vr', () => {
                     const session = this.el.sceneEl.xrSession;
                     if (!session) return;
 
-                    // Request Hit-Test Source for WebXR Passthrough
                     session.requestReferenceSpace('viewer').then((refSpace) => {
                         this.viewerSpace = refSpace;
                         session.requestHitTestSource({ space: this.viewerSpace }).then((source) => {
@@ -72,29 +68,44 @@
                         }).catch(e => console.log('Hit-test source error:', e));
                     }).catch(e => console.log('Viewer space error:', e));
 
-                    // Request Local-Floor Tracking Space
                     session.requestReferenceSpace('local-floor').catch(() => {
                         return session.requestReferenceSpace('local');
                     }).then((refSpace) => {
                         this.refSpace = refSpace;
                     });
 
-                    // LISTEN FOR CONTROLLER TRIGGER PULL TO LOCK LOCATION
+                    // TRIGGER SELECTION LISTENER
                     session.addEventListener('select', () => {
-                        if (!window.isHoveringButton && window.latestHitPos && !window.isPosLocked) {
-                            window.isPosLocked = true;
-                            window.lockedCoords = { ...window.latestHitPos };
+                        if (!window.isHoveringButton && window.latestHitPos) {
+                            if (window.alignmentStep < 3) {
+                                window.capturedLivePoints.push({ ...window.latestHitPos });
+                                window.alignmentStep++;
 
-                            const statusLabel = document.getElementById('hud-status-label');
-                            const saveBtn = document.getElementById('btn-save-device');
-                            const saveBtnText = document.getElementById('save-btn-text');
+                                const statusLabel = document.getElementById('hud-status-label');
+                                if (window.alignmentStep < 3) {
+                                    statusLabel.setAttribute('value', `ALIGNMENT: TAP LANDMARK ${window.alignmentStep + 1} [${window.storedRefPoints[window.alignmentStep].label.toUpperCase()}]`);
+                                } else {
+                                    statusLabel.setAttribute('value', 'MESH ALIGNED! AIM AT HARDWARE NODE & LOCK.');
+                                    statusLabel.setAttribute('color', '#39ff14');
 
-                            if (statusLabel) {
-                                statusLabel.setAttribute('value', 'SURFACE LOCKED! CLICK ANCHOR NOW.');
-                                statusLabel.setAttribute('color', '#39ff14');
+                                    const roomEntity = document.getElementById('world-mesh');
+                                    window.alignSceneToPoints(window.capturedLivePoints, window.storedRefPoints, roomEntity);
+                                }
+                            } else if (!window.isPosLocked) {
+                                window.isPosLocked = true;
+                                window.lockedCoords = { ...window.latestHitPos };
+
+                                const statusLabel = document.getElementById('hud-status-label');
+                                const saveBtn = document.getElementById('btn-save-device');
+                                const saveBtnText = document.getElementById('save-btn-text');
+
+                                if (statusLabel) {
+                                    statusLabel.setAttribute('value', 'SURFACE LOCKED! CLICK ANCHOR NOW.');
+                                    statusLabel.setAttribute('color', '#39ff14');
+                                }
+                                if (saveBtn) saveBtn.setAttribute('color', '#00f0ff');
+                                if (saveBtnText) saveBtnText.setAttribute('color', '#000000');
                             }
-                            if (saveBtn) saveBtn.setAttribute('color', '#00f0ff');
-                            if (saveBtnText) saveBtnText.setAttribute('color', '#000000');
                         }
                     });
                 });
@@ -108,18 +119,16 @@
 
                 const hitTestResults = frame.getHitTestResults(this.xrHitTestSource);
                 if (hitTestResults.length > 0) {
-                    this.lastHitResult = hitTestResults[0];
-                    const pose = this.lastHitResult.getPose(this.refSpace);
+                    const hit = hitTestResults[0];
+                    const pose = hit.getPose(this.refSpace);
                     if (pose) {
                         const p = pose.transform.position;
                         const q = pose.transform.orientation;
 
-                        // Place Green Target Reticle on Physical Surface
                         this.previewEl.object3D.position.set(p.x, p.y, p.z);
                         this.previewEl.object3D.quaternion.set(q.x, q.y, q.z, q.w);
                         this.previewEl.setAttribute('visible', 'true');
 
-                        // Save high-precision coordinates relative to spatial mesh
                         window.latestHitPos = { x: p.x.toFixed(3), y: p.y.toFixed(3), z: p.z.toFixed(3) };
                     }
                 }
@@ -127,7 +136,6 @@
         });
     </script>
 
-    <!-- Configure Native A-Frame Scene for 6DoF Passthrough & Hit Testing -->
     <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: anchors; referenceSpaceType: local-floor;"
              force-ar-passthrough
              background="transparent: true"
@@ -136,31 +144,15 @@
              xr-mode-ui="enabled: false"
              style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
         
-        <a-assets>
-            <!-- Scaniverse LiDAR Room Scan File -->
-            <a-asset-item id="room-scan-glb" src="/models/room-mesh.glb"></a-asset-item>
-        </a-assets>
-
-        <!-- Camera Rig -->
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
         </a-entity>
 
-        <!-- LOADED LIDAR ROOM MESH (Set to subtle wireframe preview for alignment verification) -->
-        <a-entity id="room-mesh" 
-                  gltf-model="#room-scan-glb" 
-                  position="0 0 0" 
-                  rotation="0 0 0" 
-                  scale="1 1 1" 
-                  visible="true" 
-                  material="wireframe: true; opacity: 0.15; color: #00f0ff">
-        </a-entity>
+        <a-entity id="world-mesh" position="0 0 0"></a-entity>
 
-        <!-- Laser Controllers with Raycaster targeting UI buttons -->
         <a-entity laser-controls="hand: left" raycaster="objects: .ui-button; far: 5;"></a-entity>
         <a-entity laser-controls="hand: right" raycaster="objects: .ui-button; far: 5;"></a-entity>
 
-        <!-- CYBERNETIC UI TERMINAL PANEL -->
         <a-entity id="world-terminal" position="0 1.4 -1.5">
             <a-cylinder radius="0.015" height="0.9" color="#1e293b" position="0 -0.45 0" material="shader: flat; depthTest: true;"></a-cylinder>
             
@@ -178,8 +170,8 @@
             </a-text>
 
             <a-text id="hud-status-label" 
-                    value="AIM AT HARDWARE & PULL TRIGGER TO LOCK" 
-                    color="#94a3b8" 
+                    value="ALIGNMENT: TAP LANDMARK 1 [CARPET CORNER]" 
+                    color="#00f0ff" 
                     align="center" 
                     width="1.5" 
                     position="0 0.08 0.02" 
@@ -196,7 +188,6 @@
             </a-plane>
         </a-entity>
 
-        <!-- GREEN TARGET RETICLE -->
         <a-entity id="placement-preview" visible="false">
             <a-ring radius-inner="0.08" radius-outer="0.1" color="#39ff14" rotation="-90 0 0" material="shader: flat; depthTest: true;"></a-ring>
             <a-box size="0.12" material="color: #39ff14; wireframe: true; depthTest: true;" position="0 0.06 0"></a-box>
@@ -210,6 +201,14 @@
         window.latestHitPos = null;
         window.lockedCoords = null;
         window.isHoveringButton = false;
+
+        window.storedRefPoints = [];
+        window.capturedLivePoints = [];
+        window.alignmentStep = 0;
+
+        fetch('/models/reference-landmarks.json')
+            .then(res => res.json())
+            .then(data => { window.storedRefPoints = data; });
 
         const devices = [
             { key: 'smart_climate_node', label: 'TARGET: SMART CLIMATE NODE' },
@@ -238,38 +237,18 @@
         saveBtn.addEventListener('click', async () => {
             if (!window.lockedCoords) return;
 
-            const sceneEl = document.querySelector('a-scene');
-            const spatialComp = sceneEl.components['noemata-spatial-manager'];
             const activeKey = devices[currentDeviceIndex].key;
-
-            statusLabel.setAttribute('value', 'LOCKING ANCHOR TO META OS...');
+            statusLabel.setAttribute('value', 'SAVING ANCHOR TO RENDER SERVER...');
             statusLabel.setAttribute('color', '#00f0ff');
-
-            let anchorUUID = null;
-
-            try {
-                if (spatialComp && spatialComp.lastHitResult && spatialComp.lastHitResult.createAnchor) {
-                    const anchor = await spatialComp.lastHitResult.createAnchor();
-                    if (anchor && anchor.requestPersistentHandle) {
-                        anchorUUID = await anchor.requestPersistentHandle();
-                    }
-                }
-            } catch (err) {
-                console.warn("[Anchor Persist Warning] Saving raw position fallback:", err);
-            }
 
             fetch('/api/spatial/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    deviceId: activeKey, 
-                    position: window.lockedCoords,
-                    anchorUUID: anchorUUID 
-                })
+                body: JSON.stringify({ deviceId: activeKey, position: window.lockedCoords })
             })
             .then(res => res.json())
             .then(() => {
-                statusLabel.setAttribute('value', `SAVED ${activeKey.toUpperCase()} TO META OS!`);
+                statusLabel.setAttribute('value', `SAVED ${activeKey.toUpperCase()}!`);
                 statusLabel.setAttribute('color', '#39ff14');
                 setTimeout(() => resetLock(), 1800);
             });
@@ -280,29 +259,22 @@
             window.lockedCoords = null;
             saveBtn.setAttribute('color', '#334155');
             saveBtnText.setAttribute('color', '#94a3b8');
-            statusLabel.setAttribute('value', 'AIM AT HARDWARE & PULL TRIGGER TO LOCK');
+            statusLabel.setAttribute('value', 'AIM AT HARDWARE NODE & LOCK');
             statusLabel.setAttribute('color', '#94a3b8');
         }
 
-        // Native A-Frame Session Launch
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const sceneEl = document.querySelector('a-scene');
             const button = document.getElementById('custom-ar-btn');
 
             const launch = () => {
-                if (sceneEl.enterAR) {
-                    sceneEl.enterAR();
-                } else {
-                    sceneEl.enterVR();
-                }
+                if (sceneEl.enterAR) sceneEl.enterAR();
+                else sceneEl.enterVR();
                 button.style.display = 'none';
             };
 
-            if (sceneEl.hasLoaded) {
-                launch();
-            } else {
-                sceneEl.addEventListener('loaded', launch);
-            }
+            if (sceneEl.hasLoaded) launch();
+            else sceneEl.addEventListener('loaded', launch);
         });
     </script>
 </body>

@@ -6,6 +6,7 @@
     <title>NOEMATA // SPATIAL AR VIEWER</title>
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/aligner.js"></script>
     <style>
         html, body, .a-canvas {
             background-color: transparent !important;
@@ -18,7 +19,6 @@
 <body style="margin: 0; overflow: hidden; background-color: transparent !important; background: transparent !important;">
 
     <script>
-        // Force Transparency for WebXR Passthrough
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -31,10 +31,78 @@
                 scene.addEventListener('enter-vr', setTransparent);
             }
         });
+
+        // Hit-test component for 3-point alignment in viewer
+        AFRAME.registerComponent('viewer-alignment-manager', {
+            init: function () {
+                this.xrHitTestSource = null;
+                this.viewerSpace = null;
+                this.refSpace = null;
+
+                this.el.sceneEl.addEventListener('enter-vr', () => {
+                    const session = this.el.sceneEl.xrSession;
+                    if (!session) return;
+
+                    session.requestReferenceSpace('viewer').then((refSpace) => {
+                        this.viewerSpace = refSpace;
+                        session.requestHitTestSource({ space: this.viewerSpace }).then((source) => {
+                            this.xrHitTestSource = source;
+                        }).catch(e => console.log('Hit-test source error:', e));
+                    }).catch(e => console.log('Viewer space error:', e));
+
+                    session.requestReferenceSpace('local-floor').catch(() => {
+                        return session.requestReferenceSpace('local');
+                    }).then((refSpace) => {
+                        this.refSpace = refSpace;
+                    });
+
+                    // Trigger listener to record landmark taps during setup
+                    session.addEventListener('select', () => {
+                        if (window.viewerAlignmentStep < 3 && window.latestViewerHitPos) {
+                            window.capturedViewerPoints.push({ ...window.latestViewerHitPos });
+                            window.viewerAlignmentStep++;
+
+                            const statusText = document.getElementById('hud-align-status');
+                            if (window.viewerAlignmentStep < 3) {
+                                const nextLabel = window.storedRefPoints[window.viewerAlignmentStep].label.toUpperCase();
+                                if (statusText) statusText.setAttribute('value', `ALIGNMENT: TAP ${nextLabel}`);
+                            } else {
+                                if (statusText) {
+                                    statusText.setAttribute('value', 'ALIGNMENT COMPLETE');
+                                    statusText.setAttribute('color', '#39ff14');
+                                    setTimeout(() => statusText.setAttribute('visible', 'false'), 2000);
+                                }
+
+                                const worldMesh = document.getElementById('world-mesh');
+                                window.alignSceneToPoints(window.capturedViewerPoints, window.storedRefPoints, worldMesh);
+                            }
+                        }
+                    });
+                });
+            },
+
+            tick: function () {
+                if (window.viewerAlignmentStep >= 3 || !this.xrHitTestSource || !this.refSpace) return;
+
+                const frame = this.el.sceneEl.frame;
+                if (!frame) return;
+
+                const hitTestResults = frame.getHitTestResults(this.xrHitTestSource);
+                if (hitTestResults.length > 0) {
+                    const hit = hitTestResults[0];
+                    const pose = hit.getPose(this.refSpace);
+                    if (pose) {
+                        const p = pose.transform.position;
+                        window.latestViewerHitPos = { x: p.x.toFixed(3), y: p.y.toFixed(3), z: p.z.toFixed(3) };
+                    }
+                }
+            }
+        });
     </script>
 
-    <a-scene webxr="optionalFeatures: anchors, unbounded, local-floor; referenceSpaceType: local-floor;"
+    <a-scene webxr="optionalFeatures: hit-test, anchors, unbounded, local-floor; referenceSpaceType: local-floor;"
              force-passthrough
+             viewer-alignment-manager
              renderer="alpha: true; colorManagement: true; antialias: true;"
              xr-mode-ui="mode: ar"
              style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
@@ -48,59 +116,67 @@
                           geometry="primitive: ring; radiusInner: 0.003; radiusOuter: 0.006"
                           material="color: #00f0ff; shader: flat; opacity: 0.5">
                 </a-entity>
+
+                <!-- Alignment Status Banner HUD -->
+                <a-text id="hud-align-status"
+                        value="ALIGNMENT: TAP CARPET CORNER"
+                        color="#00f0ff"
+                        align="center"
+                        width="1.2"
+                        position="0 0.3 -1.2"
+                        font="monoid">
+                </a-text>
             </a-entity>
         </a-entity>
 
-        <!-- Asynchronous Room Mesh Reference (Invisible in Production) -->
-        <a-entity id="room-mesh" 
-                  gltf-model="/models/room-mesh.glb" 
-                  position="0 0 0" 
-                  visible="false">
-        </a-entity>
+        <!-- World Mesh Parent Entity for Aligned Scene Transformation -->
+        <a-entity id="world-mesh" position="0 0 0">
 
-        <!-- 1. SMART CLIMATE NODE (Default fallback position: 0, 1.4, -1.2) -->
-        <a-entity class="gaze-target" id="smart-climate-asset"
-                  geometry="primitive: box; width: 0.16; height: 0.16; depth: 0.16" 
-                  material="color: #00f0ff; wireframe: true; opacity: 0.85" 
-                  position="0 1.4 -1.2">
-            
-            <a-text value="[ NOEMATA // CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
+            <!-- 1. SMART CLIMATE NODE -->
+            <a-entity class="gaze-target" id="smart-climate-asset"
+                      geometry="primitive: box; width: 0.16; height: 0.16; depth: 0.16" 
+                      material="color: #00f0ff; wireframe: true; opacity: 0.85" 
+                      position="0 -10 0">
+                
+                <a-text value="[ NOEMATA // CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
 
-            <a-entity class="info-card" position="0 0.35 0" visible="false" scale="0.001 0.001 0.001">
-                <a-plane width="0.65" height="0.3" color="#121620" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
-                <a-text id="popup-climate-status" value="CLIMATE: OPTIMAL" color="#00f0ff" width="1.1" position="-0.28 0.08 0.01" font="monoid"></a-text>
-                <a-text id="popup-climate-temp" value="TEMP: -- °F | HUM: --%" color="#ffffff" width="0.9" position="-0.28 -0.04 0.01" font="monoid"></a-text>
+                <a-entity class="info-card" position="0 0.35 0" visible="false" scale="0.001 0.001 0.001">
+                    <a-plane width="0.65" height="0.3" color="#121620" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
+                    <a-text id="popup-climate-status" value="CLIMATE: OPTIMAL" color="#00f0ff" width="1.1" position="-0.28 0.08 0.01" font="monoid"></a-text>
+                    <a-text id="popup-climate-temp" value="TEMP: -- °F | HUM: --%" color="#ffffff" width="0.9" position="-0.28 -0.04 0.01" font="monoid"></a-text>
+                </a-entity>
             </a-entity>
-        </a-entity>
 
-        <!-- 2. PERIMETER MONITOR (Default fallback position: -0.6, 1.4, -1.5) -->
-        <a-entity class="gaze-target" id="perimeter-monitor-asset"
-                  geometry="primitive: cylinder; radius: 0.12; height: 0.18" 
-                  material="color: #00f0ff; wireframe: true; opacity: 0.85" 
-                  position="-0.6 1.4 -1.5">
-            
-            <a-text value="[ NOEMATA // PERIMETER GUARD ]" position="0 0.2 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
+            <!-- 2. PERIMETER MONITOR -->
+            <a-entity class="gaze-target" id="perimeter-monitor-asset"
+                      geometry="primitive: cylinder; radius: 0.12; height: 0.18" 
+                      material="color: #00f0ff; wireframe: true; opacity: 0.85" 
+                      position="0 -10 0">
+                
+                <a-text value="[ NOEMATA // PERIMETER GUARD ]" position="0 0.2 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
 
-            <a-entity class="info-card" position="0 0.35 0" visible="false" scale="0.001 0.001 0.001">
-                <a-plane width="0.6" height="0.28" color="#121620" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
-                <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#00f0ff" width="1.1" position="-0.25 0.07 0.01" font="monoid"></a-text>
-                <a-text id="popup-perimeter-breach" value="BREACHES: 0" color="#ff0055" width="0.9" position="-0.25 -0.04 0.01" font="monoid"></a-text>
+                <a-entity class="info-card" position="0 0.35 0" visible="false" scale="0.001 0.001 0.001">
+                    <a-plane width="0.6" height="0.28" color="#121620" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
+                    <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#00f0ff" width="1.1" position="-0.25 0.07 0.01" font="monoid"></a-text>
+                    <a-text id="popup-perimeter-breach" value="BREACHES: 0" color="#ff0055" width="0.9" position="-0.25 -0.04 0.01" font="monoid"></a-text>
+                </a-entity>
             </a-entity>
-        </a-entity>
 
-        <!-- 3. SMART POWER RELAY (Default fallback position: 0.6, 1.4, -1.5) -->
-        <a-entity class="gaze-target" id="smart-relay-asset"
-                  geometry="primitive: box; width: 0.15; height: 0.15; depth: 0.15" 
-                  material="color: #64748b; wireframe: true; opacity: 0.85" 
-                  position="0.6 1.4 -1.5">
-            
-            <a-text value="[ NOEMATA // POWER RELAY ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
+            <!-- 3. SMART POWER RELAY -->
+            <a-entity class="gaze-target" id="smart-relay-asset"
+                      geometry="primitive: box; width: 0.15; height: 0.15; depth: 0.15" 
+                      material="color: #64748b; wireframe: true; opacity: 0.85" 
+                      position="0 -10 0">
+                
+                <a-text value="[ NOEMATA // POWER RELAY ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
 
-            <a-entity class="info-card" position="0 0.35 0" visible="false" scale="0.001 0.001 0.001">
-                <a-plane width="0.6" height="0.28" color="#121620" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
-                <a-text id="popup-relay-status" value="RELAY: OFF" color="#ffffff" width="1.1" position="-0.25 0.07 0.01" font="monoid"></a-text>
-                <a-text id="popup-relay-power" value="LOAD: 0.0 kW" color="#64748b" width="0.9" position="-0.25 -0.04 0.01" font="monoid"></a-text>
+                <a-entity class="info-card" position="0 0.35 0" visible="false" scale="0.001 0.001 0.001">
+                    <a-plane width="0.6" height="0.28" color="#121620" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
+                    <a-text id="popup-relay-status" value="RELAY: OFF" color="#ffffff" width="1.1" position="-0.25 0.07 0.01" font="monoid"></a-text>
+                    <a-text id="popup-relay-power" value="LOAD: 0.0 kW" color="#64748b" width="0.9" position="-0.25 -0.04 0.01" font="monoid"></a-text>
+                </a-entity>
             </a-entity>
+
         </a-entity>
 
     </a-scene>
@@ -108,6 +184,17 @@
     <script>
         const socket = io();
         const sceneEl = document.querySelector('a-scene');
+
+        window.storedRefPoints = [];
+        window.capturedViewerPoints = [];
+        window.viewerAlignmentStep = 0;
+        window.latestViewerHitPos = null;
+
+        // Fetch reference landmarks from JSON
+        fetch('/models/reference-landmarks.json')
+            .then(res => res.json())
+            .then(data => { window.storedRefPoints = data; })
+            .catch(err => console.error("Landmark JSON Fetch Error:", err));
 
         async function applyRegisteredAnchors(map) {
             const session = sceneEl.xrSession;
@@ -125,7 +212,6 @@
                 if (data && el) {
                     let restored = false;
 
-                    // Try native WebXR spatial anchor restoration
                     if (session && data.anchorUUID && session.restorePersistentAnchor) {
                         try {
                             const anchor = await session.restorePersistentAnchor(data.anchorUUID);
@@ -138,7 +224,6 @@
                         }
                     }
 
-                    // Fall back to saved spatial coordinates from DB
                     if (!restored && data.x !== undefined && data.x !== null) {
                         el.setAttribute('position', `${data.x} ${data.y} ${data.z}`);
                         console.log(`[SPATIAL COORDS APPLIED] ${item.key}: (${data.x}, ${data.y}, ${data.z})`);
@@ -147,7 +232,6 @@
             }
         }
 
-        // Fetch registered anchors on load
         fetch('/api/spatial/map')
             .then(res => res.json())
             .then(map => applyRegisteredAnchors(map))
@@ -155,7 +239,6 @@
 
         socket.on('spatialAnchorsUpdated', (map) => applyRegisteredAnchors(map));
 
-        // Hover gaze interaction for popup cards
         document.querySelectorAll('.gaze-target').forEach(el => {
             const card = el.querySelector('.info-card');
             el.addEventListener('raycaster-intersected', () => {
@@ -172,7 +255,6 @@
             });
         });
 
-        // Real-time telemetry updates
         socket.on('climateStateUpdate', (data) => {
             const tempText = document.getElementById('popup-climate-temp');
             const statusText = document.getElementById('popup-climate-status');
