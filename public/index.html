@@ -13,9 +13,27 @@
             margin: 0; padding: 0; overflow: hidden;
             width: 100%; height: 100%;
         }
+        #custom-ar-btn {
+            position: absolute;
+            bottom: 25px;
+            right: 25px;
+            z-index: 99999;
+            padding: 16px 28px;
+            background: #00f0ff;
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+        }
     </style>
 </head>
 <body style="margin: 0; overflow: hidden; background-color: transparent !important; background: transparent !important;">
+
+    <button id="custom-ar-btn">ENTER NOEMATA AR VIEWER</button>
 
     <script>
         AFRAME.registerComponent('force-passthrough', {
@@ -32,10 +50,11 @@
         });
     </script>
 
-    <a-scene webxr="optionalFeatures: hit-test, anchors, unbounded, local-floor; referenceSpaceType: local-floor;"
+    <!-- FIXED WEBXR SESSION CONFIGURATION FOR QUEST PASSTHROUGH -->
+    <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: anchors, unbounded; referenceSpaceType: local-floor;"
              force-passthrough
              renderer="alpha: true; colorManagement: true; antialias: true;"
-             xr-mode-ui="mode: ar"
+             xr-mode-ui="enabled: false"
              style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
         
         <!-- Camera Rig & Gaze Cursor -->
@@ -50,7 +69,7 @@
             </a-entity>
         </a-entity>
 
-        <!-- World Mesh Parent Entity (Auto-aligned via DB Matrix on startup) -->
+        <!-- World Mesh Parent Entity (Auto-aligned via saved matrix on startup) -->
         <a-entity id="world-mesh" position="0 0 0">
 
             <!-- 1. SMART CLIMATE NODE -->
@@ -105,16 +124,16 @@
     <script>
         const socket = io();
 
-        // Automatic Localize on Page Load (Zero Taps)
+        // Automatic Localize on Page Load (Zero Taps Required)
         fetch('/api/spatial/map')
             .then(res => res.json())
             .then(db => {
-                // 1. Auto-apply Spatial Calibration Matrix
+                // 1. Auto-apply Saved Spatial Calibration Matrix
                 if (db.matrix) {
                     const worldMesh = document.getElementById('world-mesh');
-                    worldMesh.object3D.position.copy(db.matrix.position);
-                    worldMesh.object3D.quaternion.copy(db.matrix.quaternion);
-                    console.log("[NOEMATA AUTO-LOCALIZED] Saved matrix applied.");
+                    if (db.matrix.position) worldMesh.object3D.position.copy(db.matrix.position);
+                    if (db.matrix.quaternion) worldMesh.object3D.quaternion.copy(db.matrix.quaternion);
+                    console.log("[NOEMATA AUTO-LOCALIZED] Saved spatial matrix applied.");
                 }
 
                 // 2. Render Hardware Anchors
@@ -144,8 +163,8 @@
 
         socket.on('spatialMatrixUpdated', (matrix) => {
             const worldMesh = document.getElementById('world-mesh');
-            worldMesh.object3D.position.copy(matrix.position);
-            worldMesh.object3D.quaternion.copy(matrix.quaternion);
+            if (matrix.position) worldMesh.object3D.position.copy(matrix.position);
+            if (matrix.quaternion) worldMesh.object3D.quaternion.copy(matrix.quaternion);
         });
 
         // Hover gaze interaction for popup cards
@@ -208,6 +227,27 @@
                 if (rStatus) rStatus.setAttribute('color', isRelayOn ? "#00f0ff" : "#ffffff");
                 if (rPower) rPower.setAttribute('value', `LOAD: ${state.smart_power_relay.powerDraw} kW`);
                 if (rAsset) rAsset.setAttribute('material', 'color', rColor);
+            }
+        });
+
+        // ENTER AR BUTTON HANDLER
+        document.getElementById('custom-ar-btn').addEventListener('click', () => {
+            const sceneEl = document.querySelector('a-scene');
+            const button = document.getElementById('custom-ar-btn');
+
+            const launch = () => {
+                if (sceneEl.enterAR) {
+                    sceneEl.enterAR();
+                } else if (sceneEl.enterVR) {
+                    sceneEl.enterVR();
+                }
+                button.style.display = 'none';
+            };
+
+            if (sceneEl.hasLoaded) {
+                launch();
+            } else {
+                sceneEl.addEventListener('loaded', launch);
             }
         });
     </script>
