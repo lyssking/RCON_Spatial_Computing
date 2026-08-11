@@ -36,6 +36,20 @@
     <button id="custom-ar-btn">ENTER NOEMATA AR VIEWER</button>
 
     <script>
+        // Disable Frustum Culling Component so matrix transformations don't hide meshes
+        AFRAME.registerComponent('no-cull', {
+            init: function () {
+                this.el.addEventListener('object3dset', () => {
+                    this.el.object3D.traverse((obj) => {
+                        if (obj.isMesh) {
+                            obj.frustumCulled = false;
+                            if (obj.geometry) obj.geometry.computeBoundingSphere();
+                        }
+                    });
+                });
+            }
+        });
+
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -55,14 +69,13 @@
              renderer="alpha: true; colorManagement: true; antialias: true;"
              xr-mode-ui="enabled: false"
              style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
-        
-        <!-- Lights for Passthrough Render -->
-        <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
-        <a-entity light="type: directional; color: #00f0ff; intensity: 1.0" position="-1 2 1"></a-entity>
+
+        <!-- Ambient Lights -->
+        <a-entity light="type: ambient; color: #ffffff; intensity: 2.0;"></a-entity>
 
         <!-- Camera Rig & Gaze Cursor -->
         <a-entity id="rig" position="0 0 0">
-            <a-entity id="main-camera" camera="near: 0.05; far: 1000;" position="0 1.6 0" look-controls>
+            <a-entity id="main-camera" camera="near: 0.01; far: 1000;" position="0 1.6 0" look-controls>
                 <a-entity id="hud-pointer"
                           raycaster="objects: .gaze-target; far: 10;"
                           cursor="fuse: false;" position="0 0 -1"
@@ -70,45 +83,45 @@
                           material="color: #00f0ff; shader: flat; opacity: 0.9; depthTest: false;">
                 </a-entity>
 
-                <a-text id="debug-hud" value="SYSTEM ONLINE: SEARCHING FOR NODES..." position="0 0.4 -1.2" align="center" width="1.2" color="#00f0ff" font="monoid"></a-text>
+                <a-text id="debug-hud" value="SYSTEM ONLINE: SEARCHING FOR NODES..." position="0 0.3 -1.2" align="center" width="1.2" color="#00f0ff" font="monoid"></a-text>
             </a-entity>
         </a-entity>
 
-        <!-- Parent World Anchor -->
-        <a-entity id="world-mesh" position="0 0 0">
+        <!-- Parent World Anchor with Culling Disabled -->
+        <a-entity id="world-mesh" position="0 0 0" no-cull>
 
             <!-- 1. SMART CLIMATE NODE -->
-            <a-entity class="gaze-target" id="smart-climate-asset" position="0 1.4 -1.2">
-                <a-box width="0.2" height="0.2" depth="0.2" material="color: #00f0ff; shader: flat; wireframe: true;"></a-box>
-                <a-text value="[ CLIMATE NODE ]" position="0 0.22 0" width="1.5" align="center" color="#00f0ff" font="monoid"></a-text>
+            <a-entity class="gaze-target" id="smart-climate-asset" position="0 1.4 -1.2" no-cull>
+                <a-box width="0.25" height="0.25" depth="0.25" material="color: #00f0ff; shader: flat; wireframe: true;" no-cull></a-box>
+                <a-text value="[ CLIMATE NODE ]" position="0 0.25 0" width="1.6" align="center" color="#00f0ff" font="monoid"></a-text>
 
-                <a-entity class="info-card" position="0 0.38 0" visible="false" scale="0.001 0.001 0.001">
-                    <a-plane width="0.7" height="0.32" color="#121620" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
-                    <a-text id="popup-climate-status" value="CLIMATE: OPTIMAL" color="#00f0ff" width="1.2" position="-0.3 0.08 0.01" font="monoid"></a-text>
+                <a-entity class="info-card" position="0 0.4 0" visible="false" scale="0.001 0.001 0.001">
+                    <a-plane width="0.75" height="0.35" color="#121620" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-text id="popup-climate-status" value="CLIMATE: OPTIMAL" color="#00f0ff" width="1.2" position="-0.3 0.09 0.01" font="monoid"></a-text>
                     <a-text id="popup-climate-temp" value="TEMP: -- °F | HUM: --%" color="#ffffff" width="1.0" position="-0.3 -0.04 0.01" font="monoid"></a-text>
                 </a-entity>
             </a-entity>
 
             <!-- 2. PERIMETER MONITOR -->
-            <a-entity class="gaze-target" id="perimeter-monitor-asset" position="-0.6 1.4 -1.5">
-                <a-cylinder radius="0.15" height="0.22" material="color: #00f0ff; shader: flat; wireframe: true;"></a-cylinder>
-                <a-text value="[ PERIMETER GUARD ]" position="0 0.24 0" width="1.5" align="center" color="#64748b" font="monoid"></a-text>
+            <a-entity class="gaze-target" id="perimeter-monitor-asset" position="-0.6 1.4 -1.5" no-cull>
+                <a-cylinder radius="0.18" height="0.28" material="color: #00f0ff; shader: flat; wireframe: true;" no-cull></a-cylinder>
+                <a-text value="[ PERIMETER GUARD ]" position="0 0.28 0" width="1.6" align="center" color="#64748b" font="monoid"></a-text>
 
-                <a-entity class="info-card" position="0 0.38 0" visible="false" scale="0.001 0.001 0.001">
-                    <a-plane width="0.65" height="0.3" color="#121620" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
-                    <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#00f0ff" width="1.1" position="-0.27 0.07 0.01" font="monoid"></a-text>
+                <a-entity class="info-card" position="0 0.4 0" visible="false" scale="0.001 0.001 0.001">
+                    <a-plane width="0.7" height="0.32" color="#121620" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#00f0ff" width="1.1" position="-0.27 0.08 0.01" font="monoid"></a-text>
                     <a-text id="popup-perimeter-breach" value="BREACHES: 0" color="#ff0055" width="0.9" position="-0.27 -0.04 0.01" font="monoid"></a-text>
                 </a-entity>
             </a-entity>
 
             <!-- 3. SMART POWER RELAY -->
-            <a-entity class="gaze-target" id="smart-relay-asset" position="0.6 1.4 -1.5">
-                <a-box width="0.18" height="0.18" depth="0.18" material="color: #64748b; shader: flat; wireframe: true;"></a-box>
-                <a-text value="[ POWER RELAY ]" position="0 0.22 0" width="1.5" align="center" color="#64748b" font="monoid"></a-text>
+            <a-entity class="gaze-target" id="smart-relay-asset" position="0.6 1.4 -1.5" no-cull>
+                <a-box width="0.2" height="0.2" depth="0.2" material="color: #64748b; shader: flat; wireframe: true;" no-cull></a-box>
+                <a-text value="[ POWER RELAY ]" position="0 0.25 0" width="1.6" align="center" color="#64748b" font="monoid"></a-text>
 
-                <a-entity class="info-card" position="0 0.38 0" visible="false" scale="0.001 0.001 0.001">
-                    <a-plane width="0.65" height="0.3" color="#121620" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
-                    <a-text id="popup-relay-status" value="RELAY: OFF" color="#ffffff" width="1.1" position="-0.27 0.07 0.01" font="monoid"></a-text>
+                <a-entity class="info-card" position="0 0.4 0" visible="false" scale="0.001 0.001 0.001">
+                    <a-plane width="0.7" height="0.32" color="#121620" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-text id="popup-relay-status" value="RELAY: OFF" color="#ffffff" width="1.1" position="-0.27 0.08 0.01" font="monoid"></a-text>
                     <a-text id="popup-relay-power" value="LOAD: 0.0 kW" color="#64748b" width="0.9" position="-0.27 -0.04 0.01" font="monoid"></a-text>
                 </a-entity>
             </a-entity>
@@ -134,11 +147,18 @@
                 const data = map[item.key];
                 const el = document.getElementById(item.elementId);
                 if (data && el && data.x !== undefined) {
-                    const posX = Math.abs(data.x) > 50 ? 0 : data.x;
-                    const posY = Math.abs(data.y) > 50 ? 1.4 : data.y;
-                    const posZ = Math.abs(data.z) > 50 ? -1.2 : data.z;
+                    const posX = Math.abs(data.x) > 50 ? 0 : parseFloat(data.x);
+                    const posY = Math.abs(data.y) > 50 ? 1.4 : parseFloat(data.y);
+                    const posZ = Math.abs(data.z) > 50 ? -1.2 : parseFloat(data.z);
 
                     el.setAttribute('position', `${posX} ${posY} ${posZ}`);
+
+                    // Force Three.js object matrix update
+                    if (el.object3D) {
+                        el.object3D.position.set(posX, posY, posZ);
+                        el.object3D.updateMatrix();
+                        el.object3D.updateMatrixWorld(true);
+                    }
                     loadedCount++;
                 }
             });
@@ -146,7 +166,7 @@
             if (debugHud) {
                 debugHud.setAttribute('value', `LOCALIZED ${loadedCount}/3 NODES`);
                 debugHud.setAttribute('color', '#39ff14');
-                setTimeout(() => debugHud.setAttribute('visible', 'false'), 3000);
+                setTimeout(() => debugHud.setAttribute('visible', 'false'), 3500);
             }
         }
 
@@ -155,9 +175,9 @@
             .then(db => {
                 if (db.matrix && db.matrix.position) {
                     const worldMesh = document.getElementById('world-mesh');
-                    const mx = Math.abs(db.matrix.position.x) > 50 ? 0 : db.matrix.position.x;
-                    const my = Math.abs(db.matrix.position.y) > 50 ? 0 : db.matrix.position.y;
-                    const mz = Math.abs(db.matrix.position.z) > 50 ? 0 : db.matrix.position.z;
+                    const mx = Math.abs(db.matrix.position.x) > 50 ? 0 : parseFloat(db.matrix.position.x);
+                    const my = Math.abs(db.matrix.position.y) > 50 ? 0 : parseFloat(db.matrix.position.y);
+                    const mz = Math.abs(db.matrix.position.z) > 50 ? 0 : parseFloat(db.matrix.position.z);
 
                     worldMesh.object3D.position.set(mx, my, mz);
                     if (db.matrix.quaternion) {
