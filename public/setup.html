@@ -34,7 +34,7 @@
 </head>
 <body style="margin: 0; overflow: hidden; background: transparent !important;">
 
-    <button id="custom-ar-btn">ENTER NOEMATA AR</button>
+    <button id="custom-ar-btn">ENTER NOEMATA AR SETUP</button>
 
     <script>
         AFRAME.registerComponent('force-ar-passthrough', {
@@ -78,7 +78,7 @@
                     session.addEventListener('select', () => {
                         if (window.isHoveringButton || !window.latestHitPos) return;
 
-                        // STAGE 1: LANDMARK ALIGNMENT (Taps 0, 1, 2)
+                        // STAGE 1: ONE-TIME LANDMARK ALIGNMENT (Taps 0, 1, 2)
                         if (window.alignmentStep < 3) {
                             window.capturedLivePoints.push({ ...window.latestHitPos });
                             window.alignmentStep++;
@@ -90,11 +90,23 @@
                                 statusLabel.setAttribute('value', `TAP ${window.alignmentStep + 1}: ${nextLandmark}`);
                                 statusLabel.setAttribute('color', '#00f0ff');
                             } else {
-                                statusLabel.setAttribute('value', 'ALIGNED! AIM AT HARDWARE & PULL TRIGGER');
+                                statusLabel.setAttribute('value', 'ALIGNING & SAVING MATRIX TO DB...');
                                 statusLabel.setAttribute('color', '#39ff14');
 
                                 const roomEntity = document.getElementById('world-mesh');
                                 window.alignSceneToPoints(window.capturedLivePoints, window.storedRefPoints, roomEntity);
+
+                                // Save Matrix to Database permanently
+                                fetch('/api/spatial/register-matrix', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        position: roomEntity.object3D.position,
+                                        quaternion: roomEntity.object3D.quaternion
+                                    })
+                                }).then(() => {
+                                    statusLabel.setAttribute('value', 'MATRIX SAVED! AIM AT HARDWARE & LOCK');
+                                });
                             }
                             return;
                         }
@@ -144,7 +156,7 @@
         });
     </script>
 
-    <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: anchors; referenceSpaceType: local-floor;"
+    <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: anchors, unbounded; referenceSpaceType: local-floor;"
              force-ar-passthrough
              background="transparent: true"
              noemata-spatial-manager
@@ -161,7 +173,7 @@
         <a-entity laser-controls="hand: left" raycaster="objects: .ui-button; far: 5;"></a-entity>
         <a-entity laser-controls="hand: right" raycaster="objects: .ui-button; far: 5;"></a-entity>
 
-        <!-- FLOATING HUD TERMINAL (VERTICAL BAR REMOVED) -->
+        <!-- FLOATING HUD TERMINAL (NO VERTICAL BAR) -->
         <a-entity id="world-terminal" position="0 1.4 -1.5">
             <a-plane width="1.4" height="0.75" color="#0d1117" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
             <a-plane width="1.44" height="0.79" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader: flat; depthTest: true;"></a-plane>
@@ -209,7 +221,6 @@
         window.lockedCoords = null;
         window.isHoveringButton = false;
 
-        // INLINED RECAP LANDMARK COORDINATES (Zero external file dependencies)
         window.storedRefPoints = [
             { "id": "ref_point_1", "label": "Carpet Corner", "x": 0.000, "y": 0.000, "z": 0.000 },
             { "id": "ref_point_2", "label": "Cabinet Corner", "x": -1.088, "y": 0.838, "z": 0.190 },

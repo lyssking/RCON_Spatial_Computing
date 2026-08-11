@@ -2,74 +2,67 @@ const express = require('express');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const cors = require('cors');
 const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
-});
+const io = new Server(server);
 
-const DB_FILE = './spatial-db.json';
+const DB_PATH = path.join(__dirname, 'spatial-db.json');
 
-app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-let spatialMap = {};
-if (fs.existsSync(DB_FILE)) {
+// Helper to read database
+function readDB() {
+    if (!fs.existsSync(DB_PATH)) {
+        return { anchors: {}, matrix: null };
+    }
     try {
-        spatialMap = JSON.parse(fs.readFileSync(DB_FILE));
-    } catch (err) {
-        console.error('DB Error:', err);
+        const raw = fs.readFileSync(DB_PATH, 'utf8');
+        return JSON.parse(raw);
+    } catch (e) {
+        return { anchors: {}, matrix: null };
     }
 }
 
-let systemState = {
-    smart_climate_node: { temperature: 72.0, humidity: 45.0, status: "OPTIMAL" },
-    perimeter_monitor: { perimeter: "SECURE", breachCount: 0 },
-    smart_power_relay: { status: "OFF", powerDraw: 0.0 }
-};
+// Helper to write database
+function writeDB(data) {
+    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+}
 
-app.get('/setup', (req, res) => res.sendFile(path.join(__dirname, 'public/setup.html')));
-app.get('/operator', (req, res) => res.sendFile(path.join(__dirname, 'public/operator.html')));
-
-app.get('/api/spatial/map', (req, res) => res.json(spatialMap));
-
+// Register Hardware Anchor Position
 app.post('/api/spatial/register', (req, res) => {
     const { deviceId, position, anchorUUID } = req.body;
-    spatialMap[deviceId] = {
-        x: position ? parseFloat(position.x) : 0,
-        y: position ? parseFloat(position.y) : 0,
-        z: position ? parseFloat(position.z) : 0,
-        anchorUUID: anchorUUID || null,
-        updatedAt: new Date().toISOString()
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(spatialMap, null, 2));
-    io.emit('spatialAnchorsUpdated', spatialMap);
-    res.json({ status: 'OK' });
+    const db = readDB();
+    if (!db.anchors) db.anchors = {};
+
+    db.anchors[deviceId] = { ...position, anchorUUID, timestamp: Date.now() };
+    writeDB(db);
+
+    io.emit('spatialAnchorsUpdated', db.anchors);
+    res.json({ status: 'success', deviceId, position });
 });
 
-app.post('/api/telemetry/climate', (req, res) => {
-    const { temperature, humidity } = req.body;
-    const tempVal = parseFloat(temperature);
-    const isOverheating = tempVal > 85.0;
+// Save Spatial Alignment Matrix (Run ONCE during setup)
+app.post('/api/spatial/register-matrix', (req, res) => {
+    const { position, quaternion } = req.body;
+    const db = readDB();
 
-    systemState.smart_climate_node = {
-        temperature: tempVal,
-        humidity: parseFloat(humidity),
-        status: isOverheating ? "OVERHEATING_WARNING" : "OPTIMAL"
-    };
+    db.matrix = { position, quaternion, timestamp: Date.now() };
+    writeDB(db);
 
-    io.emit('climateStateUpdate', systemState.smart_climate_node);
-    res.json({ status: 'ACCEPTED' });
+    io.emit('spatialMatrixUpdated', db.matrix);
+    res.json({ status: 'success', matrix: db.matrix });
 });
 
-io.on('connection', (socket) => {
-    socket.emit('spatialAnchorsUpdated', spatialMap);
-    socket.emit('twinStateUpdate', systemState);
+// Fetch Spatial Map & Saved Matrix
+app.get('/api/spatial/map', (req, res) => {
+    const db = readDB();
+    res.json(db);
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`NOEMATA Server Active on Port ${PORT}`));
+server.listen(PORT, () => {
+    console.log(`[NOEMATA SERVER RUNNING] Port ${PORT}`);
+});
