@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOEMATA // SPATIAL AR VIEWER</title>
+    <title>NOEMATA // SPATIAL ANCHOR SETUP</title>
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/aligner.js"></script>
@@ -14,12 +14,30 @@
             margin: 0; padding: 0; overflow: hidden;
             width: 100%; height: 100%;
         }
+        #custom-ar-btn {
+            position: absolute;
+            bottom: 25px;
+            right: 25px;
+            z-index: 99999;
+            padding: 16px 28px;
+            background: #00f0ff;
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+        }
     </style>
 </head>
-<body style="margin: 0; overflow: hidden; background-color: transparent !important; background: transparent !important;">
+<body style="margin: 0; overflow: hidden; background: transparent !important;">
+
+    <button id="custom-ar-btn">ENTER NOEMATA AR</button>
 
     <script>
-        AFRAME.registerComponent('force-passthrough', {
+        AFRAME.registerComponent('force-ar-passthrough', {
             init: function () {
                 const scene = this.el;
                 const setTransparent = () => {
@@ -32,12 +50,12 @@
             }
         });
 
-        // Hit-test component for 3-point alignment in viewer
-        AFRAME.registerComponent('viewer-alignment-manager', {
+        AFRAME.registerComponent('noemata-spatial-manager', {
             init: function () {
                 this.xrHitTestSource = null;
                 this.viewerSpace = null;
                 this.refSpace = null;
+                this.previewEl = document.getElementById('placement-preview');
 
                 this.el.sceneEl.addEventListener('enter-vr', () => {
                     const session = this.el.sceneEl.xrSession;
@@ -56,33 +74,53 @@
                         this.refSpace = refSpace;
                     });
 
-                    // Trigger listener to record landmark taps during setup
+                    // TRIGGER SELECTION LISTENER
                     session.addEventListener('select', () => {
-                        if (window.viewerAlignmentStep < 3 && window.latestViewerHitPos) {
-                            window.capturedViewerPoints.push({ ...window.latestViewerHitPos });
-                            window.viewerAlignmentStep++;
+                        if (window.isHoveringButton || !window.latestHitPos) return;
 
-                            const statusText = document.getElementById('hud-align-status');
-                            if (window.viewerAlignmentStep < 3) {
-                                const nextLabel = window.storedRefPoints[window.viewerAlignmentStep].label.toUpperCase();
-                                if (statusText) statusText.setAttribute('value', `ALIGNMENT: TAP ${nextLabel}`);
+                        // STAGE 1: LANDMARK ALIGNMENT (Taps 0, 1, 2)
+                        if (window.alignmentStep < 3) {
+                            window.capturedLivePoints.push({ ...window.latestHitPos });
+                            window.alignmentStep++;
+
+                            const statusLabel = document.getElementById('hud-status-label');
+
+                            if (window.alignmentStep < 3) {
+                                const nextLandmark = window.storedRefPoints[window.alignmentStep].label.toUpperCase();
+                                statusLabel.setAttribute('value', `TAP ${window.alignmentStep + 1}: ${nextLandmark}`);
+                                statusLabel.setAttribute('color', '#00f0ff');
                             } else {
-                                if (statusText) {
-                                    statusText.setAttribute('value', 'ALIGNMENT COMPLETE');
-                                    statusText.setAttribute('color', '#39ff14');
-                                    setTimeout(() => statusText.setAttribute('visible', 'false'), 2000);
-                                }
+                                statusLabel.setAttribute('value', 'ALIGNED! AIM AT HARDWARE & PULL TRIGGER');
+                                statusLabel.setAttribute('color', '#39ff14');
 
-                                const worldMesh = document.getElementById('world-mesh');
-                                window.alignSceneToPoints(window.capturedViewerPoints, window.storedRefPoints, worldMesh);
+                                const roomEntity = document.getElementById('world-mesh');
+                                window.alignSceneToPoints(window.capturedLivePoints, window.storedRefPoints, roomEntity);
                             }
+                            return;
+                        }
+
+                        // STAGE 2: HARDWARE ANCHOR PLACEMENT
+                        if (!window.isPosLocked) {
+                            window.isPosLocked = true;
+                            window.lockedCoords = { ...window.latestHitPos };
+
+                            const statusLabel = document.getElementById('hud-status-label');
+                            const saveBtn = document.getElementById('btn-save-device');
+                            const saveBtnText = document.getElementById('save-btn-text');
+
+                            if (statusLabel) {
+                                statusLabel.setAttribute('value', 'SURFACE LOCKED! CLICK ANCHOR NOW.');
+                                statusLabel.setAttribute('color', '#39ff14');
+                            }
+                            if (saveBtn) saveBtn.setAttribute('color', '#00f0ff');
+                            if (saveBtnText) saveBtnText.setAttribute('color', '#000000');
                         }
                     });
                 });
             },
 
             tick: function () {
-                if (window.viewerAlignmentStep >= 3 || !this.xrHitTestSource || !this.refSpace) return;
+                if (!this.xrHitTestSource || !this.refSpace || window.isPosLocked) return;
 
                 const frame = this.el.sceneEl.frame;
                 if (!frame) return;
@@ -93,210 +131,165 @@
                     const pose = hit.getPose(this.refSpace);
                     if (pose) {
                         const p = pose.transform.position;
-                        window.latestViewerHitPos = { x: p.x.toFixed(3), y: p.y.toFixed(3), z: p.z.toFixed(3) };
+                        const q = pose.transform.orientation;
+
+                        this.previewEl.object3D.position.set(p.x, p.y, p.z);
+                        this.previewEl.object3D.quaternion.set(q.x, q.y, q.z, q.w);
+                        this.previewEl.setAttribute('visible', 'true');
+
+                        window.latestHitPos = { x: p.x.toFixed(3), y: p.y.toFixed(3), z: p.z.toFixed(3) };
                     }
                 }
             }
         });
     </script>
 
-    <a-scene webxr="optionalFeatures: hit-test, anchors, unbounded, local-floor; referenceSpaceType: local-floor;"
-             force-passthrough
-             viewer-alignment-manager
+    <!-- FIXED WEBXR CONFIGURATION: hit-test is required for AR mode trigger -->
+    <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: anchors, unbounded; referenceSpaceType: local-floor;"
+             force-ar-passthrough
+             background="transparent: true"
+             noemata-spatial-manager
              renderer="alpha: true; colorManagement: true; antialias: true;"
-             xr-mode-ui="mode: ar"
+             xr-mode-ui="enabled: false"
              style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
         
-        <!-- Camera Rig & Gaze Cursor -->
         <a-entity id="rig" position="0 0 0">
-            <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
-                <a-entity id="hud-pointer"
-                          raycaster="objects: .gaze-target; far: 10;"
-                          cursor="fuse: false;" position="0 0 -1"
-                          geometry="primitive: ring; radiusInner: 0.003; radiusOuter: 0.006"
-                          material="color: #00f0ff; shader: flat; opacity: 0.5">
-                </a-entity>
-
-                <!-- Alignment Status Banner HUD -->
-                <a-text id="hud-align-status"
-                        value="ALIGNMENT: TAP CARPET CORNER"
-                        color="#00f0ff"
-                        align="center"
-                        width="1.2"
-                        position="0 0.3 -1.2"
-                        font="monoid">
-                </a-text>
-            </a-entity>
+            <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
         </a-entity>
 
-        <!-- World Mesh Parent Entity for Aligned Scene Transformation -->
-        <a-entity id="world-mesh" position="0 0 0">
+        <a-entity id="world-mesh" position="0 0 0"></a-entity>
 
-            <!-- 1. SMART CLIMATE NODE -->
-            <a-entity class="gaze-target" id="smart-climate-asset"
-                      geometry="primitive: box; width: 0.16; height: 0.16; depth: 0.16" 
-                      material="color: #00f0ff; wireframe: true; opacity: 0.85" 
-                      position="0 -10 0">
-                
-                <a-text value="[ NOEMATA // CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
+        <a-entity laser-controls="hand: left" raycaster="objects: .ui-button; far: 5;"></a-entity>
+        <a-entity laser-controls="hand: right" raycaster="objects: .ui-button; far: 5;"></a-entity>
 
-                <a-entity class="info-card" position="0 0.35 0" visible="false" scale="0.001 0.001 0.001">
-                    <a-plane width="0.65" height="0.3" color="#121620" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
-                    <a-text id="popup-climate-status" value="CLIMATE: OPTIMAL" color="#00f0ff" width="1.1" position="-0.28 0.08 0.01" font="monoid"></a-text>
-                    <a-text id="popup-climate-temp" value="TEMP: -- °F | HUM: --%" color="#ffffff" width="0.9" position="-0.28 -0.04 0.01" font="monoid"></a-text>
-                </a-entity>
-            </a-entity>
+        <!-- FLOATING HUD TERMINAL -->
+        <a-entity id="world-terminal" position="0 1.4 -1.5">
+            <a-plane width="1.4" height="0.75" color="#0d1117" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
+            <a-plane width="1.44" height="0.79" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader: flat; depthTest: true;"></a-plane>
 
-            <!-- 2. PERIMETER MONITOR -->
-            <a-entity class="gaze-target" id="perimeter-monitor-asset"
-                      geometry="primitive: cylinder; radius: 0.12; height: 0.18" 
-                      material="color: #00f0ff; wireframe: true; opacity: 0.85" 
-                      position="0 -10 0">
-                
-                <a-text value="[ NOEMATA // PERIMETER GUARD ]" position="0 0.2 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
+            <a-text id="hud-device-label" 
+                    value="TARGET: SMART CLIMATE NODE" 
+                    color="#00f0ff" 
+                    align="center" 
+                    width="2.0" 
+                    position="0 0.24 0.02" 
+                    font="monoid"
+                    wrap-count="30">
+            </a-text>
 
-                <a-entity class="info-card" position="0 0.35 0" visible="false" scale="0.001 0.001 0.001">
-                    <a-plane width="0.6" height="0.28" color="#121620" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
-                    <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#00f0ff" width="1.1" position="-0.25 0.07 0.01" font="monoid"></a-text>
-                    <a-text id="popup-perimeter-breach" value="BREACHES: 0" color="#ff0055" width="0.9" position="-0.25 -0.04 0.01" font="monoid"></a-text>
-                </a-entity>
-            </a-entity>
+            <a-text id="hud-status-label" 
+                    value="TAP 1: CARPET CORNER" 
+                    color="#00f0ff" 
+                    align="center" 
+                    width="1.5" 
+                    position="0 0.08 0.02" 
+                    font="monoid"
+                    wrap-count="38">
+            </a-text>
 
-            <!-- 3. SMART POWER RELAY -->
-            <a-entity class="gaze-target" id="smart-relay-asset"
-                      geometry="primitive: box; width: 0.15; height: 0.15; depth: 0.15" 
-                      material="color: #64748b; wireframe: true; opacity: 0.85" 
-                      position="0 -10 0">
-                
-                <a-text value="[ NOEMATA // POWER RELAY ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
+            <a-plane class="ui-button" id="btn-toggle-device" width="0.55" height="0.16" color="#1e293b" position="-0.35 -0.18 0.03" material="shader: flat; depthTest: true;">
+                <a-text value="[ NEXT DEVICE ]" color="#00f0ff" width="1.3" align="center" position="0 0 0.01" font="monoid"></a-text>
+            </a-plane>
 
-                <a-entity class="info-card" position="0 0.35 0" visible="false" scale="0.001 0.001 0.001">
-                    <a-plane width="0.6" height="0.28" color="#121620" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
-                    <a-text id="popup-relay-status" value="RELAY: OFF" color="#ffffff" width="1.1" position="-0.25 0.07 0.01" font="monoid"></a-text>
-                    <a-text id="popup-relay-power" value="LOAD: 0.0 kW" color="#64748b" width="0.9" position="-0.25 -0.04 0.01" font="monoid"></a-text>
-                </a-entity>
-            </a-entity>
+            <a-plane class="ui-button" id="btn-save-device" width="0.55" height="0.16" color="#334155" position="0.35 -0.18 0.03" material="shader: flat; depthTest: true;">
+                <a-text id="save-btn-text" value="[ CREATE ANCHOR ]" color="#94a3b8" width="1.3" align="center" position="0 0 0.01" font="monoid"></a-text>
+            </a-plane>
+        </a-entity>
 
+        <a-entity id="placement-preview" visible="false">
+            <a-ring radius-inner="0.08" radius-outer="0.1" color="#39ff14" rotation="-90 0 0" material="shader: flat; depthTest: true;"></a-ring>
+            <a-box size="0.12" material="color: #39ff14; wireframe: true; depthTest: true;" position="0 0.06 0"></a-box>
         </a-entity>
 
     </a-scene>
 
     <script>
         const socket = io();
-        const sceneEl = document.querySelector('a-scene');
+        window.isPosLocked = false;
+        window.latestHitPos = null;
+        window.lockedCoords = null;
+        window.isHoveringButton = false;
 
-        window.storedRefPoints = [];
-        window.capturedViewerPoints = [];
-        window.viewerAlignmentStep = 0;
-        window.latestViewerHitPos = null;
+        // INLINED RECAP LANDMARK COORDINATES
+        window.storedRefPoints = [
+            { "id": "ref_point_1", "label": "Carpet Corner", "x": 0.000, "y": 0.000, "z": 0.000 },
+            { "id": "ref_point_2", "label": "Cabinet Corner", "x": -1.088, "y": 0.838, "z": 0.190 },
+            { "id": "ref_point_3", "label": "Desk Corner", "x": 1.499, "y": 0.603, "z": 2.494 }
+        ];
+        window.capturedLivePoints = [];
+        window.alignmentStep = 0;
 
-        // Fetch reference landmarks from JSON
-        fetch('/models/reference-landmarks.json')
+        const devices = [
+            { key: 'smart_climate_node', label: 'TARGET: SMART CLIMATE NODE' },
+            { key: 'perimeter_monitor', label: 'TARGET: PERIMETER MONITOR' },
+            { key: 'smart_power_relay', label: 'TARGET: SMART POWER RELAY' }
+        ];
+        let currentDeviceIndex = 0;
+
+        const deviceLabel = document.getElementById('hud-device-label');
+        const statusLabel = document.getElementById('hud-status-label');
+        const toggleBtn = document.getElementById('btn-toggle-device');
+        const saveBtn = document.getElementById('btn-save-device');
+        const saveBtnText = document.getElementById('save-btn-text');
+
+        [toggleBtn, saveBtn].forEach(btn => {
+            btn.addEventListener('raycaster-intersected', () => { window.isHoveringButton = true; });
+            btn.addEventListener('raycaster-intersected-cleared', () => { window.isHoveringButton = false; });
+        });
+
+        toggleBtn.addEventListener('click', () => {
+            currentDeviceIndex = (currentDeviceIndex + 1) % devices.length;
+            deviceLabel.setAttribute('value', devices[currentDeviceIndex].label);
+            resetLock();
+        });
+
+        saveBtn.addEventListener('click', async () => {
+            if (!window.lockedCoords) return;
+
+            const activeKey = devices[currentDeviceIndex].key;
+            statusLabel.setAttribute('value', 'SAVING ANCHOR TO RENDER SERVER...');
+            statusLabel.setAttribute('color', '#00f0ff');
+
+            fetch('/api/spatial/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceId: activeKey, position: window.lockedCoords })
+            })
             .then(res => res.json())
-            .then(data => { window.storedRefPoints = data; })
-            .catch(err => console.error("Landmark JSON Fetch Error:", err));
+            .then(() => {
+                statusLabel.setAttribute('value', `SAVED ${activeKey.toUpperCase()}!`);
+                statusLabel.setAttribute('color', '#39ff14');
+                setTimeout(() => resetLock(), 1800);
+            });
+        });
 
-        async function applyRegisteredAnchors(map) {
-            const session = sceneEl.xrSession;
-
-            const targets = [
-                { key: 'smart_climate_node', elementId: 'smart-climate-asset' },
-                { key: 'perimeter_monitor', elementId: 'perimeter-monitor-asset' },
-                { key: 'smart_power_relay', elementId: 'smart-relay-asset' }
-            ];
-
-            for (const item of targets) {
-                const data = map[item.key];
-                const el = document.getElementById(item.elementId);
-
-                if (data && el) {
-                    let restored = false;
-
-                    if (session && data.anchorUUID && session.restorePersistentAnchor) {
-                        try {
-                            const anchor = await session.restorePersistentAnchor(data.anchorUUID);
-                            if (anchor) {
-                                restored = true;
-                                console.log(`[NOEMATA ANCHOR LOCALIZED] ${item.key}`);
-                            }
-                        } catch (e) {
-                            console.warn(`[NOEMATA ANCHOR FALLBACK] ${item.key}:`, e);
-                        }
-                    }
-
-                    if (!restored && data.x !== undefined && data.x !== null) {
-                        el.setAttribute('position', `${data.x} ${data.y} ${data.z}`);
-                        console.log(`[SPATIAL COORDS APPLIED] ${item.key}: (${data.x}, ${data.y}, ${data.z})`);
-                    }
-                }
-            }
+        function resetLock() {
+            window.isPosLocked = false;
+            window.lockedCoords = null;
+            saveBtn.setAttribute('color', '#334155');
+            saveBtnText.setAttribute('color', '#94a3b8');
+            statusLabel.setAttribute('value', 'AIM AT HARDWARE NODE & LOCK');
+            statusLabel.setAttribute('color', '#94a3b8');
         }
 
-        fetch('/api/spatial/map')
-            .then(res => res.json())
-            .then(map => applyRegisteredAnchors(map))
-            .catch(err => console.error("Map Fetch Error:", err));
+        // ENTER AR BUTTON HANDLER
+        document.getElementById('custom-ar-btn').addEventListener('click', () => {
+            const sceneEl = document.querySelector('a-scene');
+            const button = document.getElementById('custom-ar-btn');
 
-        socket.on('spatialAnchorsUpdated', (map) => applyRegisteredAnchors(map));
-
-        document.querySelectorAll('.gaze-target').forEach(el => {
-            const card = el.querySelector('.info-card');
-            el.addEventListener('raycaster-intersected', () => {
-                if (card) {
-                    card.setAttribute('visible', 'true');
-                    card.setAttribute('scale', '1 1 1');
+            const launch = () => {
+                if (sceneEl.enterAR) {
+                    sceneEl.enterAR();
+                } else if (sceneEl.enterVR) {
+                    sceneEl.enterVR();
                 }
-            });
-            el.addEventListener('raycaster-intersected-cleared', () => {
-                if (card) {
-                    card.setAttribute('visible', 'false');
-                    card.setAttribute('scale', '0.001 0.001 0.001');
-                }
-            });
-        });
+                button.style.display = 'none';
+            };
 
-        socket.on('climateStateUpdate', (data) => {
-            const tempText = document.getElementById('popup-climate-temp');
-            const statusText = document.getElementById('popup-climate-status');
-            const assetMesh = document.getElementById('smart-climate-asset');
-
-            if (tempText && statusText) {
-                tempText.setAttribute('value', `TEMP: ${data.temperature} °F | HUM: ${data.humidity}%`);
-                statusText.setAttribute('value', `CLIMATE: ${data.status}`);
-                
-                const activeColor = data.status === "OVERHEATING_WARNING" ? "#ff0055" : "#00f0ff";
-                statusText.setAttribute('color', activeColor);
-                if (assetMesh) assetMesh.setAttribute('material', 'color', activeColor);
-            }
-        });
-
-        socket.on('twinStateUpdate', (state) => {
-            if (state.perimeter_monitor) {
-                const pStatus = document.getElementById('popup-perimeter-status');
-                const pBreach = document.getElementById('popup-perimeter-breach');
-                const pAsset = document.getElementById('perimeter-monitor-asset');
-
-                const isBreached = state.perimeter_monitor.perimeter === "BREACH_ALERT";
-                const pColor = isBreached ? "#ff0055" : "#00f0ff";
-
-                if (pStatus) pStatus.setAttribute('value', `SHIELD: ${state.perimeter_monitor.perimeter}`);
-                if (pStatus) pStatus.setAttribute('color', pColor);
-                if (pBreach) pBreach.setAttribute('value', `BREACHES: ${state.perimeter_monitor.breachCount}`);
-                if (pAsset) pAsset.setAttribute('material', 'color', pColor);
-            }
-
-            if (state.smart_power_relay) {
-                const rStatus = document.getElementById('popup-relay-status');
-                const rPower = document.getElementById('popup-relay-power');
-                const rAsset = document.getElementById('smart-relay-asset');
-
-                const isRelayOn = state.smart_power_relay.status === "ON";
-                const rColor = isRelayOn ? "#00f0ff" : "#64748b";
-
-                if (rStatus) rStatus.setAttribute('value', `RELAY: ${state.smart_power_relay.status}`);
-                if (rStatus) rStatus.setAttribute('color', isRelayOn ? "#00f0ff" : "#ffffff");
-                if (rPower) rPower.setAttribute('value', `LOAD: ${state.smart_power_relay.powerDraw} kW`);
-                if (rAsset) rAsset.setAttribute('material', 'color', rColor);
+            if (sceneEl.hasLoaded) {
+                launch();
+            } else {
+                sceneEl.addEventListener('loaded', launch);
             }
         });
     </script>
