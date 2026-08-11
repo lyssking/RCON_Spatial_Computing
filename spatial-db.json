@@ -1,8 +1,8 @@
 {
   "anchors": {
-    "smart_climate_node": { "x": "0.000", "y": "1.400", "z": "-1.200" },
-    "perimeter_monitor": { "x": "-0.600", "y": "1.400", "z": "-1.500" },
-    "smart_power_relay": { "x": "0.600", "y": "1.400", "z": "-1.500" }
+    "smart_climate_node": { "x": 0, "y": 1.4, "z": -1.2 },
+    "perimeter_monitor": { "x": -0.6, "y": 1.4, "z": -1.5 },
+    "smart_power_relay": { "x": 0.6, "y": 1.4, "z": -1.5 }
   },
   "matrix": {
     "position": { "x": 0, "y": 0, "z": 0 },
