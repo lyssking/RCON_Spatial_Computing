@@ -76,36 +76,51 @@
 
                     // TRIGGER SELECTION LISTENER
                     session.addEventListener('select', () => {
-                        if (!window.isHoveringButton && window.latestHitPos) {
-                            if (window.alignmentStep < 3) {
-                                window.capturedLivePoints.push({ ...window.latestHitPos });
-                                window.alignmentStep++;
+                        // Ignore button laser clicks or missing hit positions
+                        if (window.isHoveringButton || !window.latestHitPos) return;
 
-                                const statusLabel = document.getElementById('hud-status-label');
-                                if (window.alignmentStep < 3) {
-                                    statusLabel.setAttribute('value', `ALIGNMENT: TAP LANDMARK ${window.alignmentStep + 1} [${window.storedRefPoints[window.alignmentStep].label.toUpperCase()}]`);
-                                } else {
-                                    statusLabel.setAttribute('value', 'MESH ALIGNED! AIM AT HARDWARE NODE & LOCK.');
-                                    statusLabel.setAttribute('color', '#39ff14');
-
-                                    const roomEntity = document.getElementById('world-mesh');
-                                    window.alignSceneToPoints(window.capturedLivePoints, window.storedRefPoints, roomEntity);
-                                }
-                            } else if (!window.isPosLocked) {
-                                window.isPosLocked = true;
-                                window.lockedCoords = { ...window.latestHitPos };
-
-                                const statusLabel = document.getElementById('hud-status-label');
-                                const saveBtn = document.getElementById('btn-save-device');
-                                const saveBtnText = document.getElementById('save-btn-text');
-
-                                if (statusLabel) {
-                                    statusLabel.setAttribute('value', 'SURFACE LOCKED! CLICK ANCHOR NOW.');
-                                    statusLabel.setAttribute('color', '#39ff14');
-                                }
-                                if (saveBtn) saveBtn.setAttribute('color', '#00f0ff');
-                                if (saveBtnText) saveBtnText.setAttribute('color', '#000000');
+                        // STAGE 1: LANDMARK ALIGNMENT (Steps 0, 1, 2)
+                        if (window.alignmentStep < 3) {
+                            if (!window.storedRefPoints || window.storedRefPoints.length < 3) {
+                                console.warn("[SETUP] Landmarks JSON not loaded yet!");
+                                return;
                             }
+
+                            window.capturedLivePoints.push({ ...window.latestHitPos });
+                            window.alignmentStep++;
+
+                            const statusLabel = document.getElementById('hud-status-label');
+
+                            if (window.alignmentStep < 3) {
+                                const nextLandmark = window.storedRefPoints[window.alignmentStep].label.toUpperCase();
+                                statusLabel.setAttribute('value', `TAP ${window.alignmentStep + 1}: ${nextLandmark}`);
+                                statusLabel.setAttribute('color', '#00f0ff');
+                            } else {
+                                // 3 points collected -> Execute Matrix Alignment!
+                                statusLabel.setAttribute('value', 'ALIGNED! AIM AT HARDWARE & PULL TRIGGER');
+                                statusLabel.setAttribute('color', '#39ff14');
+
+                                const roomEntity = document.getElementById('world-mesh');
+                                window.alignSceneToPoints(window.capturedLivePoints, window.storedRefPoints, roomEntity);
+                            }
+                            return; // Stop here during alignment steps
+                        }
+
+                        // STAGE 2: HARDWARE ANCHOR PLACEMENT (Only unlocked AFTER alignment)
+                        if (!window.isPosLocked) {
+                            window.isPosLocked = true;
+                            window.lockedCoords = { ...window.latestHitPos };
+
+                            const statusLabel = document.getElementById('hud-status-label');
+                            const saveBtn = document.getElementById('btn-save-device');
+                            const saveBtnText = document.getElementById('save-btn-text');
+
+                            if (statusLabel) {
+                                statusLabel.setAttribute('value', 'SURFACE LOCKED! CLICK ANCHOR NOW.');
+                                statusLabel.setAttribute('color', '#39ff14');
+                            }
+                            if (saveBtn) saveBtn.setAttribute('color', '#00f0ff');
+                            if (saveBtnText) saveBtnText.setAttribute('color', '#000000');
                         }
                     });
                 });
@@ -170,8 +185,8 @@
             </a-text>
 
             <a-text id="hud-status-label" 
-                    value="ALIGNMENT: TAP LANDMARK 1 [CARPET CORNER]" 
-                    color="#00f0ff" 
+                    value="LOADING LANDMARKS..." 
+                    color="#ffaa00" 
                     align="center" 
                     width="1.5" 
                     position="0 0.08 0.02" 
@@ -206,9 +221,26 @@
         window.capturedLivePoints = [];
         window.alignmentStep = 0;
 
+        const statusLabel = document.getElementById('hud-status-label');
+
+        // Load reference landmarks and unlock alignment stage
         fetch('/models/reference-landmarks.json')
             .then(res => res.json())
-            .then(data => { window.storedRefPoints = data; });
+            .then(data => { 
+                window.storedRefPoints = data; 
+                if (data && data.length >= 3) {
+                    statusLabel.setAttribute('value', `TAP 1: ${data[0].label.toUpperCase()}`);
+                    statusLabel.setAttribute('color', '#00f0ff');
+                } else {
+                    statusLabel.setAttribute('value', 'ERROR: LANDMARK JSON INVALID');
+                    statusLabel.setAttribute('color', '#ff0055');
+                }
+            })
+            .catch(err => {
+                console.error("Landmark Fetch Error:", err);
+                statusLabel.setAttribute('value', 'ERROR: COULD NOT LOAD LANDMARKS');
+                statusLabel.setAttribute('color', '#ff0055');
+            });
 
         const devices = [
             { key: 'smart_climate_node', label: 'TARGET: SMART CLIMATE NODE' },
@@ -218,7 +250,6 @@
         let currentDeviceIndex = 0;
 
         const deviceLabel = document.getElementById('hud-device-label');
-        const statusLabel = document.getElementById('hud-status-label');
         const toggleBtn = document.getElementById('btn-toggle-device');
         const saveBtn = document.getElementById('btn-save-device');
         const saveBtnText = document.getElementById('save-btn-text');
