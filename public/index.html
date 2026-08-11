@@ -63,56 +63,56 @@
                           raycaster="objects: .gaze-target; far: 10;"
                           cursor="fuse: false;" position="0 0 -1"
                           geometry="primitive: ring; radiusInner: 0.003; radiusOuter: 0.006"
-                          material="color: #00f0ff; shader: flat; opacity: 0.5">
+                          material="color: #00f0ff; shader: flat; opacity: 0.8">
                 </a-entity>
             </a-entity>
         </a-entity>
 
-        <!-- World Mesh Parent Entity (Transformed by Saved DB Matrix) -->
+        <!-- Parent World Anchor (Reset to origin) -->
         <a-entity id="world-mesh" position="0 0 0">
 
             <!-- 1. SMART CLIMATE NODE -->
             <a-entity class="gaze-target" id="smart-climate-asset"
-                      geometry="primitive: box; width: 0.16; height: 0.16; depth: 0.16" 
-                      material="color: #00f0ff; wireframe: true; opacity: 0.85" 
+                      geometry="primitive: box; width: 0.2; height: 0.2; depth: 0.2" 
+                      material="color: #00f0ff; wireframe: true; opacity: 0.9" 
                       position="0 1.4 -1.2">
                 
-                <a-text value="[ NOEMATA // CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
+                <a-text value="[ CLIMATE NODE ]" position="0 0.22 0" width="1.4" align="center" color="#00f0ff" font="monoid"></a-text>
 
-                <a-entity class="info-card" position="0 0.35 0" visible="false" scale="0.001 0.001 0.001">
-                    <a-plane width="0.65" height="0.3" color="#121620" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
-                    <a-text id="popup-climate-status" value="CLIMATE: OPTIMAL" color="#00f0ff" width="1.1" position="-0.28 0.08 0.01" font="monoid"></a-text>
-                    <a-text id="popup-climate-temp" value="TEMP: -- °F | HUM: --%" color="#ffffff" width="0.9" position="-0.28 -0.04 0.01" font="monoid"></a-text>
+                <a-entity class="info-card" position="0 0.38 0" visible="false" scale="0.001 0.001 0.001">
+                    <a-plane width="0.7" height="0.32" color="#121620" opacity="0.95" material="shader: flat; depthTest: true;"></a-plane>
+                    <a-text id="popup-climate-status" value="CLIMATE: OPTIMAL" color="#00f0ff" width="1.2" position="-0.3 0.08 0.01" font="monoid"></a-text>
+                    <a-text id="popup-climate-temp" value="TEMP: -- °F | HUM: --%" color="#ffffff" width="1.0" position="-0.3 -0.04 0.01" font="monoid"></a-text>
                 </a-entity>
             </a-entity>
 
             <!-- 2. PERIMETER MONITOR -->
             <a-entity class="gaze-target" id="perimeter-monitor-asset"
-                      geometry="primitive: cylinder; radius: 0.12; height: 0.18" 
-                      material="color: #00f0ff; wireframe: true; opacity: 0.85" 
-                      position="-0.5 1.4 -1.5">
+                      geometry="primitive: cylinder; radius: 0.15; height: 0.22" 
+                      material="color: #00f0ff; wireframe: true; opacity: 0.9" 
+                      position="-0.6 1.4 -1.5">
                 
-                <a-text value="[ NOEMATA // PERIMETER GUARD ]" position="0 0.2 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
+                <a-text value="[ PERIMETER GUARD ]" position="0 0.24 0" width="1.4" align="center" color="#64748b" font="monoid"></a-text>
 
-                <a-entity class="info-card" position="0 0.35 0" visible="false" scale="0.001 0.001 0.001">
-                    <a-plane width="0.6" height="0.28" color="#121620" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
-                    <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#00f0ff" width="1.1" position="-0.25 0.07 0.01" font="monoid"></a-text>
-                    <a-text id="popup-perimeter-breach" value="BREACHES: 0" color="#ff0055" width="0.9" position="-0.25 -0.04 0.01" font="monoid"></a-text>
+                <a-entity class="info-card" position="0 0.38 0" visible="false" scale="0.001 0.001 0.001">
+                    <a-plane width="0.65" height="0.3" color="#121620" opacity="0.95" material="shader: flat; depthTest: true;"></a-plane>
+                    <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#00f0ff" width="1.1" position="-0.27 0.07 0.01" font="monoid"></a-text>
+                    <a-text id="popup-perimeter-breach" value="BREACHES: 0" color="#ff0055" width="0.9" position="-0.27 -0.04 0.01" font="monoid"></a-text>
                 </a-entity>
             </a-entity>
 
             <!-- 3. SMART POWER RELAY -->
             <a-entity class="gaze-target" id="smart-relay-asset"
-                      geometry="primitive: box; width: 0.15; height: 0.15; depth: 0.15" 
-                      material="color: #64748b; wireframe: true; opacity: 0.85" 
-                      position="0.5 1.4 -1.5">
+                      geometry="primitive: box; width: 0.18; height: 0.18; depth: 0.18" 
+                      material="color: #64748b; wireframe: true; opacity: 0.9" 
+                      position="0.6 1.4 -1.5">
                 
-                <a-text value="[ NOEMATA // POWER RELAY ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
+                <a-text value="[ POWER RELAY ]" position="0 0.22 0" width="1.4" align="center" color="#64748b" font="monoid"></a-text>
 
-                <a-entity class="info-card" position="0 0.35 0" visible="false" scale="0.001 0.001 0.001">
-                    <a-plane width="0.6" height="0.28" color="#121620" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
-                    <a-text id="popup-relay-status" value="RELAY: OFF" color="#ffffff" width="1.1" position="-0.25 0.07 0.01" font="monoid"></a-text>
-                    <a-text id="popup-relay-power" value="LOAD: 0.0 kW" color="#64748b" width="0.9" position="-0.25 -0.04 0.01" font="monoid"></a-text>
+                <a-entity class="info-card" position="0 0.38 0" visible="false" scale="0.001 0.001 0.001">
+                    <a-plane width="0.65" height="0.3" color="#121620" opacity="0.95" material="shader: flat; depthTest: true;"></a-plane>
+                    <a-text id="popup-relay-status" value="RELAY: OFF" color="#ffffff" width="1.1" position="-0.27 0.07 0.01" font="monoid"></a-text>
+                    <a-text id="popup-relay-power" value="LOAD: 0.0 kW" color="#64748b" width="0.9" position="-0.27 -0.04 0.01" font="monoid"></a-text>
                 </a-entity>
             </a-entity>
 
@@ -135,26 +135,35 @@
                 const data = map[item.key];
                 const el = document.getElementById(item.elementId);
                 if (data && el && data.x !== undefined) {
-                    el.setAttribute('position', `${data.x} ${data.y} ${data.z}`);
-                    console.log(`[NODE APPLIED] ${item.key}: (${data.x}, ${data.y}, ${data.z})`);
+                    // Sanity check: prevent values beyond 100m
+                    const posX = Math.abs(data.x) > 100 ? 0 : data.x;
+                    const posY = Math.abs(data.y) > 100 ? 1.4 : data.y;
+                    const posZ = Math.abs(data.z) > 100 ? -1.2 : data.z;
+
+                    el.setAttribute('position', `${posX} ${posY} ${posZ}`);
+                    console.log(`[NODE LOCALIZED] ${item.key}: (${posX}, ${posY}, ${posZ})`);
                 }
             });
         }
 
-        // Fetch DB Map & Auto-Localize
         fetch('/api/spatial/map')
             .then(res => res.json())
             .then(db => {
-                // 1. Apply Saved Matrix to Parent Room Entity
-                if (db.matrix) {
+                if (db.matrix && db.matrix.position) {
                     const worldMesh = document.getElementById('world-mesh');
-                    if (db.matrix.position) worldMesh.object3D.position.copy(db.matrix.position);
-                    if (db.matrix.quaternion) worldMesh.object3D.quaternion.copy(db.matrix.quaternion);
+                    
+                    // Clamping checks for ReCap coordinate explosion
+                    const mx = Math.abs(db.matrix.position.x) > 100 ? 0 : db.matrix.position.x;
+                    const my = Math.abs(db.matrix.position.y) > 100 ? 0 : db.matrix.position.y;
+                    const mz = Math.abs(db.matrix.position.z) > 100 ? 0 : db.matrix.position.z;
+
+                    worldMesh.object3D.position.set(mx, my, mz);
+                    if (db.matrix.quaternion) {
+                        worldMesh.object3D.quaternion.copy(db.matrix.quaternion);
+                    }
                     worldMesh.object3D.updateMatrixWorld(true);
-                    console.log("[NOEMATA MATRIX APPLIED]", db.matrix);
                 }
 
-                // 2. Apply Saved Anchors (Handles both db.anchors or flat map structure)
                 const anchorMap = db.anchors || db;
                 applyRegisteredAnchors(anchorMap);
             })
@@ -162,14 +171,7 @@
 
         socket.on('spatialAnchorsUpdated', (anchors) => applyRegisteredAnchors(anchors));
 
-        socket.on('spatialMatrixUpdated', (matrix) => {
-            const worldMesh = document.getElementById('world-mesh');
-            if (matrix.position) worldMesh.object3D.position.copy(matrix.position);
-            if (matrix.quaternion) worldMesh.object3D.quaternion.copy(matrix.quaternion);
-            worldMesh.object3D.updateMatrixWorld(true);
-        });
-
-        // Hover gaze interaction for popup cards
+        // Hover gaze interaction
         document.querySelectorAll('.gaze-target').forEach(el => {
             const card = el.querySelector('.info-card');
             el.addEventListener('raycaster-intersected', () => {
@@ -186,7 +188,7 @@
             });
         });
 
-        // Real-time telemetry updates
+        // Telemetry handlers
         socket.on('climateStateUpdate', (data) => {
             const tempText = document.getElementById('popup-climate-temp');
             const statusText = document.getElementById('popup-climate-status');
@@ -232,7 +234,6 @@
             }
         });
 
-        // ENTER AR BUTTON HANDLER
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const sceneEl = document.querySelector('a-scene');
             const button = document.getElementById('custom-ar-btn');
