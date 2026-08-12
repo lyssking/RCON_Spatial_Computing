@@ -3,10 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOEMATA // MINDAR GAZE LOCK SETUP</title>
+    <title>NOEMATA // HYBRID SETUP AUTHORING TOOL</title>
     
+    <!-- A-Frame Core -->
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+
+    <!-- MindAR Image Tracking Integration -->
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    
+    <!-- Real-Time WebSockets -->
     <script src="/socket.io/socket.io.js"></script>
 
     <style>
@@ -20,11 +25,11 @@
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 99999;
             background: rgba(13, 17, 23, 0.92); border: 1px solid #00f0ff;
             border-radius: 8px; padding: 12px 20px; color: #00f0ff;
-            font-family: monospace; text-align: center; width: 320px;
+            font-family: monospace; text-align: center; width: 340px;
             box-shadow: 0 0 20px rgba(0, 240, 255, 0.3); pointer-events: none;
         }
         #hud-title { font-weight: bold; font-size: 14px; margin-bottom: 4px; color: #fff; }
-        #hud-status { font-size: 12px; color: #39ff14; }
+        #hud-status { font-size: 12px; color: #00f0ff; }
 
         #action-overlay {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 99999;
@@ -42,20 +47,20 @@
 </head>
 <body style="margin: 0; overflow: hidden; background-color: transparent !important;">
 
-    <!-- TOP TELEMETRY / INSTRUCTION BANNER -->
+    <!-- TOP CONTROL BANNER -->
     <div id="hud-control-banner">
         <div id="hud-title">TARGET: SMART CLIMATE NODE</div>
-        <div id="hud-status">AIM AT NODE LOCATION & PULL TRIGGER</div>
+        <div id="hud-status">POINT CAMERA AT PRINTED TARGET MARKER</div>
     </div>
 
-    <!-- BOTTOM FLOATING CONTROLS -->
+    <!-- BOTTOM ACTION BUTTONS -->
     <div id="action-overlay">
         <button class="action-btn" onclick="toggleActiveDevice()">[ NEXT DEVICE ]</button>
-        <button class="action-btn" id="save-btn" onclick="saveLockedAnchor()">[ COMMIT ANCHOR ]</button>
+        <button class="action-btn" id="save-btn" onclick="saveLockedAnchor()">[ COMMIT TO DB ]</button>
     </div>
 
     <script>
-        // Force A-Frame WebGL canvas to be 100% transparent for Quest Passthrough
+        // Force transparent canvas for WebXR Passthrough mode
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -70,31 +75,50 @@
             }
         });
 
-        AFRAME.registerComponent('gaze-lock-listener', {
+        // Dynamic Bounding Box Cursor Tracker
+        AFRAME.registerComponent('placement-box-tracker', {
             init: function () {
-                this.el.addEventListener('click', (evt) => {
-                    if (!window.targetFound) return;
+                this.raycaster = document.querySelector('#hud-pointer').components.raycaster;
+                this.placementBox = document.querySelector('#placement-guide-box');
+            },
+            tick: function () {
+                if (!this.raycaster || !this.placementBox) return;
 
-                    const intersection = evt.detail.intersection;
-                    if (intersection) {
-                        const anchorEntity = document.querySelector('#noemata-spatial-anchor').object3D;
-                        const hitPoint = intersection.point.clone();
-                        
-                        anchorEntity.worldToLocal(hitPoint);
+                const intersection = this.raycaster.getIntersection(document.querySelector('.placement-surface'));
+                if (intersection) {
+                    const anchorEntity = document.querySelector('#noemata-spatial-anchor').object3D;
+                    const hitPoint = intersection.point.clone();
+                    
+                    // Convert camera hit coordinates to MindAR anchor relative offset
+                    anchorEntity.worldToLocal(hitPoint);
 
+                    this.placementBox.object3D.position.copy(intersection.point);
+                    this.placementBox.setAttribute('visible', 'true');
+                    window.currentGazeLocalPoint = hitPoint;
+                }
+            }
+        });
+
+        // Trigger Lock Listener Component
+        AFRAME.registerComponent('trigger-lock-listener', {
+            init: function () {
+                this.el.addEventListener('click', () => {
+                    if (window.currentGazeLocalPoint) {
                         const activeKey = window.devices[window.currentDeviceIndex].key;
+                        const pt = window.currentGazeLocalPoint;
+
                         window.lockedPositions[activeKey] = {
-                            x: parseFloat(hitPoint.x.toFixed(2)),
-                            y: parseFloat(hitPoint.y.toFixed(2)),
-                            z: parseFloat(hitPoint.z.toFixed(2))
+                            x: parseFloat(pt.x.toFixed(2)),
+                            y: parseFloat(pt.y.toFixed(2)),
+                            z: parseFloat(pt.z.toFixed(2))
                         };
 
-                        const previewMesh = document.getElementById(`${activeKey}-preview`);
-                        if (previewMesh) {
-                            previewMesh.setAttribute('position', `${hitPoint.x} ${hitPoint.y} ${hitPoint.z}`);
+                        const previewEl = document.getElementById(`${activeKey}-preview`);
+                        if (previewEl) {
+                            previewEl.setAttribute('position', `${pt.x} ${pt.y} ${pt.z}`);
                         }
 
-                        document.getElementById('hud-status').innerText = `LOCKED TO (${hitPoint.x.toFixed(2)}, ${hitPoint.y.toFixed(2)}, ${hitPoint.z.toFixed(2)})!`;
+                        document.getElementById('hud-status').innerText = `LOCKED: (${pt.x.toFixed(2)}, ${pt.y.toFixed(2)}, ${pt.z.toFixed(2)})`;
                         document.getElementById('hud-status').style.color = '#39ff14';
                     }
                 });
@@ -105,26 +129,35 @@
     <a-scene 
         mindar-image="imageTargetSrc: /assets/targets.mind; autoStart: true; uiLoading: no; uiError: no;" 
         force-passthrough
+        placement-box-tracker
         webxr="requiredFeatures: hit-test, local-floor; referenceSpaceType: local-floor;"
-        color-space="sRGB" 
         renderer="colorManagement: true; antialias: true; alpha: true;" 
         vr-mode-ui="enabled: false">
 
-        <!-- Camera Rig & Cursor Reticle -->
-        <a-camera position="0 0 0" look-controls="enabled: false">
-            <a-entity id="hud-pointer"
-                      raycaster="objects: .gaze-surface; far: 20;"
-                      cursor="fuse: false;" position="0 0 -1"
-                      geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
-                      material="color: #00f0ff; shader: flat; opacity: 0.9;">
+        <!-- Camera Rig & Reticle -->
+        <a-entity id="rig" position="0 0 0">
+            <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
+                <a-entity id="hud-pointer"
+                          trigger-lock-listener
+                          raycaster="objects: .placement-surface; far: 10;"
+                          cursor="fuse: false;" position="0 0 -1"
+                          geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
+                          material="color: #00f0ff; shader: flat; opacity: 0.9;">
+                </a-entity>
             </a-entity>
-        </a-camera>
+        </a-entity>
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
-        <!-- Invisible Placement Raycast Surface -->
-        <a-plane class="gaze-surface" gaze-lock-listener position="0 0 -2" width="20" height="20" visible="false"></a-plane>
+        <!-- Dynamic Wireframe Bounding Box Guide -->
+        <a-box id="placement-guide-box" width="0.25" height="0.25" depth="0.25" 
+               material="color: #39ff14; wireframe: true; opacity: 0.8; shader: flat;" visible="false">
+        </a-box>
 
+        <!-- Invisible Raycast Sphere Target -->
+        <a-sphere class="placement-surface" position="0 1.6 -2" radius="10" visible="false"></a-sphere>
+
+        <!-- MINDAR PHYSICAL TARGET ANCHOR -->
         <a-entity id="noemata-spatial-anchor" mindar-image-target="targetIndex: 0">
 
             <!-- 1. SMART CLIMATE NODE -->
@@ -151,8 +184,9 @@
 
     <script>
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
+        const sceneEl = document.querySelector('a-scene');
 
-        window.targetFound = false;
+        window.currentGazeLocalPoint = null;
         window.devices = [
             { key: 'smart_climate_node', title: 'TARGET: SMART CLIMATE NODE' },
             { key: 'perimeter_monitor', title: 'TARGET: PERIMETER MONITOR' },
@@ -166,6 +200,7 @@
             smart_power_relay: { x: 0.45, y: 0.25, z: 0.0 }
         };
 
+        // Load existing saved coordinates from backend
         fetch('/api/spatial/map')
             .then(res => res.json())
             .then(db => {
@@ -185,11 +220,33 @@
                 });
             });
 
+        // AUTOMATIC WEBXR PASSTHROUGH LAUNCH ON TARGET SCAN
+        document.addEventListener("DOMContentLoaded", () => {
+            const targetEntity = document.querySelector('#noemata-spatial-anchor');
+
+            targetEntity.addEventListener("targetFound", () => {
+                console.log("[SCAN SUCCESS] Target recognized! Launching WebXR Passthrough...");
+                const statusEl = document.getElementById('hud-status');
+                if (statusEl) {
+                    statusEl.innerText = "TARGET ANCHORED // LAUNCHING IMMERSIVE AR...";
+                    statusEl.style.color = "#39ff14";
+                }
+
+                setTimeout(() => {
+                    if (sceneEl.enterAR) {
+                        sceneEl.enterAR().catch(err => {
+                            console.warn("[WEBXR AUTO-ENTRY FALLBACK]", err);
+                        });
+                    }
+                }, 800);
+            });
+        });
+
         function toggleActiveDevice() {
             window.currentDeviceIndex = (window.currentDeviceIndex + 1) % window.devices.length;
             const current = window.devices[window.currentDeviceIndex];
             document.getElementById('hud-title').innerText = current.title;
-            document.getElementById('hud-status').innerText = 'AIM AT NODE LOCATION & PULL TRIGGER';
+            document.getElementById('hud-status').innerText = 'GAZE AT SURFACE & PULL TRIGGER TO LOCK';
             document.getElementById('hud-status').style.color = '#00f0ff';
         }
 
@@ -206,7 +263,7 @@
             })
             .then(res => res.json())
             .then(() => {
-                document.getElementById('hud-status').innerText = `SAVED ${activeKey.toUpperCase()}!`;
+                document.getElementById('hud-status').innerText = `SAVED ${activeKey.toUpperCase()} TO DB!`;
                 document.getElementById('hud-status').style.color = '#39ff14';
             })
             .catch(() => {
@@ -214,19 +271,6 @@
                 document.getElementById('hud-status').style.color = '#ff0055';
             });
         }
-
-        document.addEventListener("DOMContentLoaded", () => {
-            const target = document.querySelector('#noemata-spatial-anchor');
-            target.addEventListener("targetFound", () => {
-                window.targetFound = true;
-                document.getElementById('hud-status').innerText = "TARGET LOCKED // READY TO GAZE & LOCK";
-            });
-            target.addEventListener("targetLost", () => {
-                window.targetFound = false;
-                document.getElementById('hud-status').innerText = "AIM CAMERA AT PRINTED TARGET MARKER";
-                document.getElementById('hud-status').style.color = '#ff0055';
-            });
-        });
     </script>
 </body>
 </html>

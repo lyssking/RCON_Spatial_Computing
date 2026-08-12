@@ -3,10 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOEMATA // MINDAR SPATIAL VIEWER</title>
+    <title>NOEMATA // HYBRID AR SCANNER</title>
     
+    <!-- A-Frame Core -->
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    
+    <!-- MindAR Image Tracking -->
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    
+    <!-- Real-time WebSockets -->
     <script src="/socket.io/socket.io.js"></script>
 
     <style>
@@ -17,18 +22,21 @@
         }
         #hud-status-banner {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 99999; padding: 10px 20px; background: rgba(13, 17, 23, 0.85);
-            border: 1px solid #00f0ff; border-radius: 6px; color: #00f0ff;
+            z-index: 99999; padding: 12px 24px; background: rgba(13, 17, 23, 0.9);
+            border: 1px solid #00f0ff; border-radius: 8px; color: #00f0ff;
             font-family: monospace; font-size: 14px; font-weight: bold;
-            letter-spacing: 1px; pointer-events: none; box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+            letter-spacing: 1px; pointer-events: none; text-align: center;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
         }
     </style>
 </head>
 <body style="margin: 0; overflow: hidden; background-color: transparent !important;">
 
-    <div id="hud-status-banner">SYSTEM ONLINE // SEARCHING FOR TARGET MARKER...</div>
+    <!-- HUD OVERLAY -->
+    <div id="hud-status-banner">POINT CAMERA AT PRINTED TARGET MARKER</div>
 
     <script>
+        // Force transparent canvas for Quest Passthrough mode
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -52,6 +60,7 @@
         renderer="colorManagement: true; antialias: true; alpha: true;" 
         vr-mode-ui="enabled: false">
 
+        <!-- Camera Rig & Cursor Reticle -->
         <a-camera position="0 0 0" look-controls="enabled: false">
             <a-entity id="hud-pointer"
                       raycaster="objects: .gaze-target; far: 10;"
@@ -63,6 +72,10 @@
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
+        <!-- 
+          MINDAR SCAN TARGET 
+          When recognized, the scene transitions into native WebXR mode.
+        -->
         <a-entity id="noemata-spatial-anchor" mindar-image-target="targetIndex: 0">
 
             <!-- 1. SMART CLIMATE NODE -->
@@ -108,7 +121,9 @@
     <script>
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
         const banner = document.getElementById('hud-status-banner');
+        const sceneEl = document.querySelector('a-scene');
 
+        // Apply saved positions from backend database
         function applyDynamicPositions(map) {
             if (!map) return;
             const targets = [
@@ -132,22 +147,30 @@
 
         socket.on('spatialAnchorsUpdated', (anchors) => applyDynamicPositions(anchors));
 
+        // TARGET SCAN DETECTION -> AUTO LAUNCH IMMERSIVE WEBXR
         document.addEventListener("DOMContentLoaded", () => {
             const targetEntity = document.querySelector('#noemata-spatial-anchor');
+
             targetEntity.addEventListener("targetFound", () => {
+                console.log("[SCAN SUCCESS] Target detected! Launching WebXR AR...");
                 if (banner) {
-                    banner.innerText = "TARGET ANCHORED // SYSTEM ACTIVE";
-                    banner.style.color = "#39ff14"; banner.style.borderColor = "#39ff14";
+                    banner.innerText = "TARGET RECOGNIZED // LAUNCHING IMMERSIVE AR...";
+                    banner.style.color = "#39ff14";
+                    banner.style.borderColor = "#39ff14";
                 }
-            });
-            targetEntity.addEventListener("targetLost", () => {
-                if (banner) {
-                    banner.innerText = "SEARCHING FOR TARGET MARKER...";
-                    banner.style.color = "#00f0ff"; banner.style.borderColor = "#00f0ff";
-                }
+
+                // Brief delay to allow tracking to stabilize before opening WebXR
+                setTimeout(() => {
+                    if (sceneEl.enterAR) {
+                        sceneEl.enterAR().catch(err => {
+                            console.warn("[WEBXR AUTO-ENTRY FALLBACK]", err);
+                        });
+                    }
+                }, 800);
             });
         });
 
+        // Gaze Hover Listeners for HUD Cards
         document.querySelectorAll('.gaze-target').forEach(targetEl => {
             const parentNode = targetEl.parentElement;
             const card = parentNode.querySelector('.info-card');
@@ -160,6 +183,7 @@
             });
         });
 
+        // Live Telemetry WebSockets
         socket.on('climateStateUpdate', (data) => {
             const tempText = document.getElementById('popup-climate-temp');
             const statusText = document.getElementById('popup-climate-status');
