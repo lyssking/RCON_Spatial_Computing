@@ -5,81 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NOEMATA // MINDAR SPATIAL VIEWER</title>
     
-    <!-- A-Frame Core -->
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-    
-    <!-- MindAR Image Tracking Integration for A-Frame -->
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-    
-    <!-- Real-time WebSockets -->
     <script src="/socket.io/socket.io.js"></script>
 
     <style>
         html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: transparent !important;
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: transparent !important;
         }
         #hud-status-banner {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 99999;
-            padding: 10px 20px;
-            background: rgba(13, 17, 23, 0.85);
-            border: 1px solid #00f0ff;
-            border-radius: 6px;
-            color: #00f0ff;
-            font-family: monospace;
-            font-size: 14px;
-            font-weight: bold;
-            letter-spacing: 1px;
-            pointer-events: none;
-            box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 99999; padding: 10px 20px; background: rgba(13, 17, 23, 0.85);
+            border: 1px solid #00f0ff; border-radius: 6px; color: #00f0ff;
+            font-family: monospace; font-size: 14px; font-weight: bold;
+            letter-spacing: 1px; pointer-events: none; box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
         }
     </style>
 </head>
 <body style="margin: 0; overflow: hidden;">
 
-    <!-- TOP STATUS OVERLAY -->
     <div id="hud-status-banner">SYSTEM ONLINE // SEARCHING FOR TARGET MARKER...</div>
 
-    <!-- 
-      MINDAR SCENE CONFIGURATION 
-      imageTargetSrc: Path to your compiled .mind target file
-    -->
     <a-scene 
         mindar-image="imageTargetSrc: /assets/targets.mind; autoStart: true; uiLoading: no; uiError: no;" 
         color-space="sRGB" 
         renderer="colorManagement: true; antialias: true; alpha: true;" 
-        vr-mode-ui="enabled: false" 
-        device-orientation-permission-ui="enabled: false">
+        vr-mode-ui="enabled: false">
 
-        <!-- Camera Rig (Fixed facing origin for MindAR tracking) -->
         <a-camera position="0 0 0" look-controls="enabled: false">
             <a-entity id="hud-pointer"
                       raycaster="objects: .gaze-target; far: 10;"
-                      cursor="fuse: false;" 
-                      position="0 0 -1"
+                      cursor="fuse: false;" position="0 0 -1"
                       geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
                       material="color: #00f0ff; shader: flat; opacity: 0.8;">
             </a-entity>
         </a-camera>
 
-        <!-- Ambient Lighting -->
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
-        <!-- 
-          MINDAR ANCHOR ENTITY (Target Index 0)
-          All child entities here are positioned relative to the printed paper's center (0, 0, 0)
-        -->
         <a-entity id="noemata-spatial-anchor" mindar-image-target="targetIndex: 0">
 
-            <!-- 1. SMART CLIMATE NODE (Center Above Marker) -->
+            <!-- 1. SMART CLIMATE NODE -->
             <a-entity id="smart-climate-asset" position="0 0.25 0">
                 <a-box class="gaze-target" width="0.18" height="0.18" depth="0.18" material="color: #00f0ff; shader: flat; wireframe: true;"></a-box>
                 <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
@@ -91,7 +58,7 @@
                 </a-entity>
             </a-entity>
 
-            <!-- 2. PERIMETER MONITOR (Left of Marker) -->
+            <!-- 2. PERIMETER MONITOR -->
             <a-entity id="perimeter-monitor-asset" position="-0.45 0.25 0">
                 <a-cylinder class="gaze-target" radius="0.12" height="0.18" material="color: #00f0ff; shader: flat; wireframe: true;"></a-cylinder>
                 <a-text value="[ PERIMETER GUARD ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
@@ -103,7 +70,7 @@
                 </a-entity>
             </a-entity>
 
-            <!-- 3. SMART POWER RELAY (Right of Marker) -->
+            <!-- 3. SMART POWER RELAY -->
             <a-entity id="smart-relay-asset" position="0.45 0.25 0">
                 <a-box class="gaze-target" width="0.15" height="0.15" depth="0.15" material="color: #64748b; shader: flat; wireframe: true;"></a-box>
                 <a-text value="[ POWER RELAY ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
@@ -120,64 +87,65 @@
     </a-scene>
 
     <script>
-        // Force secure WebSockets for Render compatibility
-        const socket = io({
-            transports: ['websocket', 'polling'],
-            secure: true
-        });
-
+        const socket = io({ transports: ['websocket', 'polling'], secure: true });
         const banner = document.getElementById('hud-status-banner');
 
-        socket.on('connect', () => {
-            console.log('[SOCKET CONNECTED]', socket.id);
-        });
+        function applyDynamicPositions(map) {
+            if (!map) return;
+            const targets = [
+                { key: 'smart_climate_node', elementId: 'smart-climate-asset' },
+                { key: 'perimeter_monitor', elementId: 'perimeter-monitor-asset' },
+                { key: 'smart_power_relay', elementId: 'smart-relay-asset' }
+            ];
 
-        // Target Detection Event Listeners
+            targets.forEach(item => {
+                const data = map[item.key];
+                const el = document.getElementById(item.elementId);
+                if (data && el && data.x !== undefined) {
+                    el.setAttribute('position', `${data.x} ${data.y} ${data.z}`);
+                }
+            });
+        }
+
+        // Fetch DB positions on startup
+        fetch('/api/spatial/map')
+            .then(res => res.json())
+            .then(db => applyDynamicPositions(db.anchors || db));
+
+        // Listen for live updates if position changes during setup
+        socket.on('spatialAnchorsUpdated', (anchors) => applyDynamicPositions(anchors));
+
         document.addEventListener("DOMContentLoaded", () => {
             const targetEntity = document.querySelector('#noemata-spatial-anchor');
-
             targetEntity.addEventListener("targetFound", () => {
-                console.log("[MINDAR] Physical target detected!");
                 if (banner) {
                     banner.innerText = "TARGET ANCHORED // SYSTEM ACTIVE";
-                    banner.style.color = "#39ff14";
-                    banner.style.borderColor = "#39ff14";
+                    banner.style.color = "#39ff14"; banner.style.borderColor = "#39ff14";
                 }
             });
-
             targetEntity.addEventListener("targetLost", () => {
-                console.log("[MINDAR] Target lost from camera view.");
                 if (banner) {
                     banner.innerText = "SEARCHING FOR TARGET MARKER...";
-                    banner.style.color = "#00f0ff";
-                    banner.style.borderColor = "#00f0ff";
+                    banner.style.color = "#00f0ff"; banner.style.borderColor = "#00f0ff";
                 }
             });
         });
 
-        // Gaze Hover Listeners for Info-Card HUD Popups
+        // Gaze Hover Listeners
         document.querySelectorAll('.gaze-target').forEach(targetEl => {
             const parentNode = targetEl.parentElement;
             const card = parentNode.querySelector('.info-card');
 
             targetEl.addEventListener('raycaster-intersected', () => {
-                if (card) {
-                    card.setAttribute('visible', 'true');
-                    card.setAttribute('scale', '1 1 1');
-                }
+                if (card) { card.setAttribute('visible', 'true'); card.setAttribute('scale', '1 1 1'); }
             });
-
             targetEl.addEventListener('raycaster-intersected-cleared', () => {
-                if (card) {
-                    card.setAttribute('visible', 'false');
-                    card.setAttribute('scale', '0.001 0.001 0.001');
-                }
+                if (card) { card.setAttribute('visible', 'false'); card.setAttribute('scale', '0.001 0.001 0.001'); }
             });
         });
 
-        // 1. Live Climate Telemetry Listener
+        // Telemetry Listeners
         socket.on('climateStateUpdate', (data) => {
-            console.log('[SOCKET RECEIVED] climateStateUpdate:', data);
             const tempText = document.getElementById('popup-climate-temp');
             const statusText = document.getElementById('popup-climate-status');
             const climateBox = document.querySelector('#smart-climate-asset a-box');
@@ -185,7 +153,6 @@
             if (tempText && statusText) {
                 tempText.setAttribute('value', `TEMP: ${data.temperature} °F | HUM: ${data.humidity}%`);
                 statusText.setAttribute('value', `CLIMATE: ${data.status}`);
-
                 const isWarning = data.status === "OVERHEATING_WARNING";
                 const activeColor = isWarning ? "#ff0055" : "#00f0ff";
                 statusText.setAttribute('color', activeColor);
@@ -193,22 +160,15 @@
             }
         });
 
-        // 2. Live Twin State Listener (Perimeter & Relay)
         socket.on('twinStateUpdate', (state) => {
-            console.log('[SOCKET RECEIVED] twinStateUpdate:', state);
-
             if (state.perimeter_monitor) {
                 const pStatus = document.getElementById('popup-perimeter-status');
                 const pBreach = document.getElementById('popup-perimeter-breach');
                 const pCylinder = document.querySelector('#perimeter-monitor-asset a-cylinder');
-
                 const isBreached = state.perimeter_monitor.perimeter === "BREACH_ALERT";
                 const pColor = isBreached ? "#ff0055" : "#00f0ff";
 
-                if (pStatus) {
-                    pStatus.setAttribute('value', `SHIELD: ${state.perimeter_monitor.perimeter}`);
-                    pStatus.setAttribute('color', pColor);
-                }
+                if (pStatus) { pStatus.setAttribute('value', `SHIELD: ${state.perimeter_monitor.perimeter}`); pStatus.setAttribute('color', pColor); }
                 if (pBreach) pBreach.setAttribute('value', `BREACHES: ${state.perimeter_monitor.breachCount}`);
                 if (pCylinder) pCylinder.setAttribute('material', 'color', pColor);
             }
@@ -217,14 +177,10 @@
                 const rStatus = document.getElementById('popup-relay-status');
                 const rPower = document.getElementById('popup-relay-power');
                 const rBox = document.querySelector('#smart-relay-asset a-box');
-
                 const isRelayOn = state.smart_power_relay.status === "ON";
                 const rColor = isRelayOn ? "#00f0ff" : "#64748b";
 
-                if (rStatus) {
-                    rStatus.setAttribute('value', `RELAY: ${state.smart_power_relay.status}`);
-                    rStatus.setAttribute('color', isRelayOn ? "#00f0ff" : "#ffffff");
-                }
+                if (rStatus) { rStatus.setAttribute('value', `RELAY: ${state.smart_power_relay.status}`); rStatus.setAttribute('color', isRelayOn ? "#00f0ff" : "#ffffff"); }
                 if (rPower) rPower.setAttribute('value', `LOAD: ${state.smart_power_relay.powerDraw} kW`);
                 if (rBox) rBox.setAttribute('material', 'color', rColor);
             }
