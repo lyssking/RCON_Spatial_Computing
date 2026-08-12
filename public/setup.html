@@ -3,15 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOEMATA // HYBRID SETUP AUTHORING TOOL</title>
+    <title>NOEMATA // NATIVE AR SETUP</title>
     
-    <!-- A-Frame Core -->
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-
-    <!-- MindAR Image Tracking Integration -->
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-    
-    <!-- Real-Time WebSockets -->
     <script src="/socket.io/socket.io.js"></script>
 
     <style>
@@ -29,10 +23,18 @@
             box-shadow: 0 0 20px rgba(0, 240, 255, 0.3); pointer-events: none;
         }
         #hud-title { font-weight: bold; font-size: 14px; margin-bottom: 4px; color: #fff; }
-        #hud-status { font-size: 12px; color: #00f0ff; }
+        #hud-status { font-size: 12px; color: #39ff14; }
+
+        #custom-ar-btn {
+            position: absolute; bottom: 25px; right: 25px; z-index: 99999;
+            padding: 16px 28px; background: #00f0ff; color: #000;
+            border: none; border-radius: 8px; font-family: monospace;
+            font-weight: bold; font-size: 16px; cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+        }
 
         #action-overlay {
-            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 99999;
+            position: absolute; bottom: 30px; left: 30px; z-index: 99999;
             display: flex; gap: 12px;
         }
         .action-btn {
@@ -47,20 +49,21 @@
 </head>
 <body style="margin: 0; overflow: hidden; background-color: transparent !important;">
 
-    <!-- TOP CONTROL BANNER -->
+    <!-- DIRECT USER GESTURE BUTTON TO LAUNCH WEBXR -->
+    <button id="custom-ar-btn">ENTER QUEST PASSTHROUGH AR</button>
+
     <div id="hud-control-banner">
         <div id="hud-title">TARGET: SMART CLIMATE NODE</div>
-        <div id="hud-status">POINT CAMERA AT PRINTED TARGET MARKER</div>
+        <div id="hud-status">GAZE AT SURFACE & PULL TRIGGER TO LOCK</div>
     </div>
 
-    <!-- BOTTOM ACTION BUTTONS -->
     <div id="action-overlay">
         <button class="action-btn" onclick="toggleActiveDevice()">[ NEXT DEVICE ]</button>
         <button class="action-btn" id="save-btn" onclick="saveLockedAnchor()">[ COMMIT TO DB ]</button>
     </div>
 
     <script>
-        // Force transparent canvas for WebXR Passthrough mode
+        // Force A-Frame canvas transparency for Quest Passthrough
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -75,7 +78,7 @@
             }
         });
 
-        // Dynamic Bounding Box Cursor Tracker
+        // Track gaze intersection and project bounding box
         AFRAME.registerComponent('placement-box-tracker', {
             init: function () {
                 this.raycaster = document.querySelector('#hud-pointer').components.raycaster;
@@ -86,26 +89,20 @@
 
                 const intersection = this.raycaster.getIntersection(document.querySelector('.placement-surface'));
                 if (intersection) {
-                    const anchorEntity = document.querySelector('#noemata-spatial-anchor').object3D;
-                    const hitPoint = intersection.point.clone();
-                    
-                    // Convert camera hit coordinates to MindAR anchor relative offset
-                    anchorEntity.worldToLocal(hitPoint);
-
                     this.placementBox.object3D.position.copy(intersection.point);
                     this.placementBox.setAttribute('visible', 'true');
-                    window.currentGazeLocalPoint = hitPoint;
+                    window.currentGazePoint = intersection.point;
                 }
             }
         });
 
-        // Trigger Lock Listener Component
+        // Trigger listener to lock active device position
         AFRAME.registerComponent('trigger-lock-listener', {
             init: function () {
                 this.el.addEventListener('click', () => {
-                    if (window.currentGazeLocalPoint) {
+                    if (window.currentGazePoint) {
                         const activeKey = window.devices[window.currentDeviceIndex].key;
-                        const pt = window.currentGazeLocalPoint;
+                        const pt = window.currentGazePoint;
 
                         window.lockedPositions[activeKey] = {
                             x: parseFloat(pt.x.toFixed(2)),
@@ -127,14 +124,13 @@
     </script>
 
     <a-scene 
-        mindar-image="imageTargetSrc: /assets/targets.mind; autoStart: true; uiLoading: no; uiError: no;" 
         force-passthrough
         placement-box-tracker
-        webxr="requiredFeatures: hit-test, local-floor; referenceSpaceType: local-floor;"
+        webxr="optionalFeatures: hit-test, passthrough; referenceSpaceType: local-floor;"
         renderer="colorManagement: true; antialias: true; alpha: true;" 
-        vr-mode-ui="enabled: false">
+        xr-mode-ui="enabled: false">
 
-        <!-- Camera Rig & Reticle -->
+        <!-- Camera Rig & Cursor Reticle -->
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
                 <a-entity id="hud-pointer"
@@ -154,39 +150,31 @@
                material="color: #39ff14; wireframe: true; opacity: 0.8; shader: flat;" visible="false">
         </a-box>
 
-        <!-- Invisible Raycast Sphere Target -->
+        <!-- Invisible Placement Raycast Surface -->
         <a-sphere class="placement-surface" position="0 1.6 -2" radius="10" visible="false"></a-sphere>
 
-        <!-- MINDAR PHYSICAL TARGET ANCHOR -->
-        <a-entity id="noemata-spatial-anchor" mindar-image-target="targetIndex: 0">
+        <!-- PREVIEW NODES -->
+        <a-entity id="smart_climate_node-preview" position="0 1.4 -1.2">
+            <a-box width="0.18" height="0.18" depth="0.18" material="color: #00f0ff; shader: flat; wireframe: true;"></a-box>
+            <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
+        </a-entity>
 
-            <!-- 1. SMART CLIMATE NODE -->
-            <a-entity id="smart_climate_node-preview" position="0 0.25 0">
-                <a-box width="0.18" height="0.18" depth="0.18" material="color: #00f0ff; shader: flat; wireframe: true;"></a-box>
-                <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
-            </a-entity>
+        <a-entity id="perimeter_monitor-preview" position="-0.6 1.4 -1.5">
+            <a-cylinder radius="0.12" height="0.18" material="color: #00f0ff; shader: flat; wireframe: true;"></a-cylinder>
+            <a-text value="[ PERIMETER GUARD ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
+        </a-entity>
 
-            <!-- 2. PERIMETER MONITOR -->
-            <a-entity id="perimeter_monitor-preview" position="-0.45 0.25 0">
-                <a-cylinder radius="0.12" height="0.18" material="color: #00f0ff; shader: flat; wireframe: true;"></a-cylinder>
-                <a-text value="[ PERIMETER GUARD ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
-            </a-entity>
-
-            <!-- 3. SMART POWER RELAY -->
-            <a-entity id="smart_power_relay-preview" position="0.45 0.25 0">
-                <a-box width="0.15" height="0.15" depth="0.15" material="color: #64748b; shader: flat; wireframe: true;"></a-box>
-                <a-text value="[ POWER RELAY ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
-            </a-entity>
-
+        <a-entity id="smart_power_relay-preview" position="0.6 1.4 -1.5">
+            <a-box width="0.15" height="0.15" depth="0.15" material="color: #64748b; shader: flat; wireframe: true;"></a-box>
+            <a-text value="[ POWER RELAY ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
         </a-entity>
 
     </a-scene>
 
     <script>
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
-        const sceneEl = document.querySelector('a-scene');
 
-        window.currentGazeLocalPoint = null;
+        window.currentGazePoint = null;
         window.devices = [
             { key: 'smart_climate_node', title: 'TARGET: SMART CLIMATE NODE' },
             { key: 'perimeter_monitor', title: 'TARGET: PERIMETER MONITOR' },
@@ -195,12 +183,12 @@
         window.currentDeviceIndex = 0;
 
         window.lockedPositions = {
-            smart_climate_node: { x: 0.0, y: 0.25, z: 0.0 },
-            perimeter_monitor: { x: -0.45, y: 0.25, z: 0.0 },
-            smart_power_relay: { x: 0.45, y: 0.25, z: 0.0 }
+            smart_climate_node: { x: 0.0, y: 1.4, z: -1.2 },
+            perimeter_monitor: { x: -0.6, y: 1.4, z: -1.5 },
+            smart_power_relay: { x: 0.6, y: 1.4, z: -1.5 }
         };
 
-        // Load existing saved coordinates from backend
+        // Fetch DB positions on startup
         fetch('/api/spatial/map')
             .then(res => res.json())
             .then(db => {
@@ -219,28 +207,6 @@
                     }
                 });
             });
-
-        // AUTOMATIC WEBXR PASSTHROUGH LAUNCH ON TARGET SCAN
-        document.addEventListener("DOMContentLoaded", () => {
-            const targetEntity = document.querySelector('#noemata-spatial-anchor');
-
-            targetEntity.addEventListener("targetFound", () => {
-                console.log("[SCAN SUCCESS] Target recognized! Launching WebXR Passthrough...");
-                const statusEl = document.getElementById('hud-status');
-                if (statusEl) {
-                    statusEl.innerText = "TARGET ANCHORED // LAUNCHING IMMERSIVE AR...";
-                    statusEl.style.color = "#39ff14";
-                }
-
-                setTimeout(() => {
-                    if (sceneEl.enterAR) {
-                        sceneEl.enterAR().catch(err => {
-                            console.warn("[WEBXR AUTO-ENTRY FALLBACK]", err);
-                        });
-                    }
-                }, 800);
-            });
-        });
 
         function toggleActiveDevice() {
             window.currentDeviceIndex = (window.currentDeviceIndex + 1) % window.devices.length;
@@ -271,6 +237,17 @@
                 document.getElementById('hud-status').style.color = '#ff0055';
             });
         }
+
+        // PHYSICAL USER CLICK HANDLER REQUIRED BY META QUEST BROWSER
+        document.getElementById('custom-ar-btn').addEventListener('click', () => {
+            const sceneEl = document.querySelector('a-scene');
+            if (sceneEl.enterAR) {
+                sceneEl.enterAR();
+            } else if (sceneEl.enterVR) {
+                sceneEl.enterVR();
+            }
+            document.getElementById('custom-ar-btn').style.display = 'none';
+        });
     </script>
 </body>
 </html>
