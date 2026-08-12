@@ -5,8 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NOEMATA // HYBRID AR SETUP</title>
     
+    <!-- A-Frame Core -->
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+
+    <!-- MindAR Image Tracking Integration -->
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    
+    <!-- Real-Time WebSockets -->
     <script src="/socket.io/socket.io.js"></script>
 
     <style>
@@ -46,6 +51,7 @@
 </head>
 <body style="margin: 0; overflow: hidden; background-color: transparent !important;">
 
+    <!-- HUD OVERLAY -->
     <div id="hud-control-banner">
         <div id="hud-title">TARGET: SMART CLIMATE NODE</div>
         <div id="hud-status">TAP SCREEN ONCE, THEN POINT AT TARGET</div>
@@ -53,12 +59,14 @@
     
     <div id="user-gesture-gateway"></div>
 
+    <!-- FLOATING ACTION CONTROLS -->
     <div id="action-overlay">
         <button class="action-btn" onclick="toggleActiveDevice()">[ NEXT DEVICE ]</button>
         <button class="action-btn" id="save-btn" onclick="saveLockedAnchor()">[ COMMIT TO DB ]</button>
     </div>
 
     <script>
+        // Transparent Canvas Configuration
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -73,18 +81,24 @@
             }
         });
 
+        // Dynamic Wireframe Box Tracker
         AFRAME.registerComponent('placement-box-tracker', {
             init: function () {
-                this.raycaster = document.querySelector('#hud-pointer').components.raycaster;
+                this.pointer = document.querySelector('#hud-pointer');
                 this.placementBox = document.querySelector('#placement-guide-box');
             },
             tick: function () {
-                if (!this.raycaster || !this.placementBox) return;
+                if (!this.pointer || !this.placementBox) return;
 
-                const intersection = this.raycaster.getIntersection(document.querySelector('.placement-surface'));
+                const raycaster = this.pointer.components.raycaster;
+                if (!raycaster) return;
+
+                const intersection = raycaster.getIntersection(document.querySelector('.placement-surface'));
                 if (intersection) {
                     const anchorEntity = document.querySelector('#noemata-spatial-anchor').object3D;
                     const hitPoint = intersection.point.clone();
+                    
+                    // Transform world coordinates into MindAR local offset space
                     anchorEntity.worldToLocal(hitPoint);
 
                     this.placementBox.object3D.position.copy(intersection.point);
@@ -94,6 +108,7 @@
             }
         });
 
+        // Trigger Click Listener to Lock Selected Object Position
         AFRAME.registerComponent('trigger-lock-listener', {
             init: function () {
                 this.el.addEventListener('click', () => {
@@ -128,28 +143,31 @@
         renderer="colorManagement: true; antialias: true; alpha: true;" 
         vr-mode-ui="enabled: false">
 
-        <a-entity id="rig" position="0 0 0">
-            <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
-                <a-entity id="hud-pointer"
-                          trigger-lock-listener
-                          raycaster="objects: .placement-surface; far: 10;"
-                          cursor="fuse: false;" position="0 0 -1"
-                          geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
-                          material="color: #00f0ff; shader: flat; opacity: 0.9;">
-                </a-entity>
+        <!-- Camera Rig & Cursor Pointer -->
+        <a-camera position="0 0 0" look-controls="enabled: false">
+            <a-entity id="hud-pointer"
+                      trigger-lock-listener
+                      raycaster="objects: .placement-surface; far: 10;"
+                      cursor="fuse: false;" position="0 0 -1"
+                      geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
+                      material="color: #00f0ff; shader: flat; opacity: 0.9;">
             </a-entity>
-        </a-entity>
+        </a-camera>
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
+        <!-- Placement Target Sphere (Raycast Zone) -->
+        <a-sphere class="placement-surface" position="0 0 -2" radius="8" visible="false"></a-sphere>
+
+        <!-- Floating Wireframe Guide Box -->
         <a-box id="placement-guide-box" width="0.25" height="0.25" depth="0.25" 
                material="color: #39ff14; wireframe: true; opacity: 0.8; shader: flat;" visible="false">
         </a-box>
 
-        <a-sphere class="placement-surface" position="0 1.6 -2" radius="10" visible="false"></a-sphere>
-
+        <!-- MINDAR SPATIAL ANCHOR -->
         <a-entity id="noemata-spatial-anchor" mindar-image-target="targetIndex: 0">
 
+            <!-- PREVIEW NODES -->
             <a-entity id="smart_climate_node-preview" position="0 0.25 0">
                 <a-box width="0.18" height="0.18" depth="0.18" material="color: #00f0ff; shader: flat; wireframe: true;"></a-box>
                 <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
@@ -188,11 +206,13 @@
             smart_power_relay: { x: 0.45, y: 0.25, z: 0.0 }
         };
 
+        // Screen Touch Unlocks WebXR Permissions on Quest
         gateway.addEventListener('click', () => {
             gateway.style.display = 'none';
             document.getElementById('hud-status').innerText = "SCANNING FOR PRINTED TARGET...";
         });
 
+        // Load Existing Coordinates from DB
         fetch('/api/spatial/map')
             .then(res => res.json())
             .then(db => {
@@ -212,17 +232,18 @@
                 });
             });
 
+        // Target Found Event Listener
         document.addEventListener("DOMContentLoaded", () => {
             const targetEntity = document.querySelector('#noemata-spatial-anchor');
 
             targetEntity.addEventListener("targetFound", () => {
-                document.getElementById('hud-status').innerText = "TARGET ANCHORED // LAUNCHING IMMERSIVE AR...";
+                document.getElementById('hud-status').innerText = "TARGET ANCHORED // LAUNCHING PASSTHROUGH...";
                 document.getElementById('hud-status').style.color = "#39ff14";
 
                 setTimeout(() => {
                     if (sceneEl.enterAR) {
                         sceneEl.enterAR().catch(err => {
-                            console.warn("[WEBXR AUTO-ENTRY FAILED]", err);
+                            console.warn("[WEBXR AUTO-ENTRY EXCEPTION]", err);
                         });
                     }
                 }, 500);
