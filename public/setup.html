@@ -10,7 +10,11 @@
     <script src="/socket.io/socket.io.js"></script>
 
     <style>
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+        html, body, .a-canvas {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: transparent !important;
+            background: transparent !important;
+        }
         
         #hud-control-banner {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 99999;
@@ -36,7 +40,7 @@
         #save-btn { background: #238636; border-color: #2ea043; color: #fff; }
     </style>
 </head>
-<body style="margin: 0; overflow: hidden;">
+<body style="margin: 0; overflow: hidden; background-color: transparent !important;">
 
     <!-- TOP TELEMETRY / INSTRUCTION BANNER -->
     <div id="hud-control-banner">
@@ -51,18 +55,31 @@
     </div>
 
     <script>
+        // Force A-Frame WebGL canvas to be 100% transparent for Quest Passthrough
+        AFRAME.registerComponent('force-passthrough', {
+            init: function () {
+                const scene = this.el;
+                const setTransparent = () => {
+                    if (scene.renderer) {
+                        scene.renderer.setClearColor(0x000000, 0);
+                        scene.renderer.alpha = true;
+                    }
+                };
+                scene.addEventListener('render-target-loaded', setTransparent);
+                scene.addEventListener('enter-vr', setTransparent);
+            }
+        });
+
         AFRAME.registerComponent('gaze-lock-listener', {
             init: function () {
                 this.el.addEventListener('click', (evt) => {
                     if (!window.targetFound) return;
 
-                    // Get point in target-relative space
                     const intersection = evt.detail.intersection;
                     if (intersection) {
                         const anchorEntity = document.querySelector('#noemata-spatial-anchor').object3D;
                         const hitPoint = intersection.point.clone();
                         
-                        // Convert global camera hit point into local MindAR anchor space
                         anchorEntity.worldToLocal(hitPoint);
 
                         const activeKey = window.devices[window.currentDeviceIndex].key;
@@ -72,7 +89,6 @@
                             z: parseFloat(hitPoint.z.toFixed(2))
                         };
 
-                        // Update virtual mesh placement
                         const previewMesh = document.getElementById(`${activeKey}-preview`);
                         if (previewMesh) {
                             previewMesh.setAttribute('position', `${hitPoint.x} ${hitPoint.y} ${hitPoint.z}`);
@@ -88,6 +104,8 @@
 
     <a-scene 
         mindar-image="imageTargetSrc: /assets/targets.mind; autoStart: true; uiLoading: no; uiError: no;" 
+        force-passthrough
+        webxr="requiredFeatures: hit-test, local-floor; referenceSpaceType: local-floor;"
         color-space="sRGB" 
         renderer="colorManagement: true; antialias: true; alpha: true;" 
         vr-mode-ui="enabled: false">
@@ -104,7 +122,7 @@
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
-        <!-- Invisible Placement Raycast Surface (Surrounds Scene) -->
+        <!-- Invisible Placement Raycast Surface -->
         <a-plane class="gaze-surface" gaze-lock-listener position="0 0 -2" width="20" height="20" visible="false"></a-plane>
 
         <a-entity id="noemata-spatial-anchor" mindar-image-target="targetIndex: 0">
@@ -148,7 +166,6 @@
             smart_power_relay: { x: 0.45, y: 0.25, z: 0.0 }
         };
 
-        // Load existing positions from backend
         fetch('/api/spatial/map')
             .then(res => res.json())
             .then(db => {
