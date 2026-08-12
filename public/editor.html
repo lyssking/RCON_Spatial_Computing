@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOEMATA // 3D SPATIAL MAP EDITOR</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0d1117; color: #c9d1d9; font-family: monospace; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        #sidebar {
+            position: absolute; top: 20px; left: 20px; width: 320px;
+            background: rgba(13, 17, 23, 0.9); border: 1px solid #30363d;
+            border-radius: 8px; padding: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        h2 { margin: 0 0 12px 0; font-size: 16px; color: #00f0ff; letter-spacing: 1px; }
+        .device-btn {
+            width: 100%; padding: 10px; margin-bottom: 8px; background: #21262d;
+            border: 1px solid #30363d; color: #00f0ff; font-weight: bold;
+            font-family: monospace; cursor: pointer; border-radius: 4px; text-align: left;
+        }
+        .device-btn.active { background: #00f0ff; color: #000; }
+        #save-btn {
+            width: 100%; padding: 12px; margin-top: 12px; background: #238636;
+            border: none; color: #fff; font-weight: bold; font-family: monospace;
+            cursor: pointer; border-radius: 4px; text-transform: uppercase;
+        }
+        #save-btn:hover { background: #2ea043; }
+        #info-box { font-size: 12px; color: #8b949e; margin-top: 10px; line-height: 1.4; }
+    </style>
+    <!-- Import Three.js & OrbitControls via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h2>NOEMATA SPACE EDITOR</h2>
+        <div id="info-box">Select a hardware node, then click any point inside the 3D room scan to set its permanent location.</div>
+        <hr style="border-color: #30363d; margin: 12px 0;">
+
+        <button class="device-btn active" id="btn-climate" onclick="selectDevice('smart_climate_node')">[1] SMART CLIMATE NODE</button>
+        <button class="device-btn" id="btn-perimeter" onclick="selectDevice('perimeter_monitor')">[2] PERIMETER MONITOR</button>
+        <button class="device-btn" id="btn-relay" onclick="selectDevice('smart_power_relay')">[3] SMART POWER RELAY</button>
+
+        <button id="save-btn" onclick="saveSpatialMap()">SAVE SPATIAL MAP TO DB</button>
+        <div id="status-msg" style="margin-top: 8px; font-size: 11px; color: #39ff14;"></div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        let scene, camera, renderer, controls, raycaster, mouse;
+        let selectedDevice = 'smart_climate_node';
+        
+        // ReCap / Scaniverse Origin Normalization (Min XYZ of your scan)
+        const LAS_ORIGIN = { x: 564326.727, y: 4828189.443, z: 821.041 };
+
+        const anchors = {
+            smart_climate_node: { x: 1.2, y: 1.4, z: -2.1 },
+            perimeter_monitor: { x: -2.5, y: 1.2, z: 3.8 },
+            smart_power_relay: { x: 2.1, y: 1.5, z: 4.2 }
+        };
+
+        const nodeMarkers = {};
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0d1117);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 10, 15);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            const gridHelper = new THREE.GridHelper(30, 30, 0x00f0ff, 0x21262d);
+            scene.add(gridHelper);
+
+            const light = new THREE.AmbientLight(0xffffff, 1.5);
+            scene.add(light);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Load Synthesized Point Cloud Preview based on your 11m x 15m scan bounding box
+            generatePointCloudPreview();
+
+            // Render interactive node markers
+            createNodeMarkers();
+
+            window.addEventListener('resize', onWindowResize);
+            renderer.domElement.addEventListener('pointerdown', onPointerDown);
+
+            animate();
+        }
+
+        function generatePointCloudPreview() {
+            // Generates a lightweight 15,000 point room preview box matching your scan parameters
+            const count = 15000;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+
+            for (let i = 0; i < count; i++) {
+                // Room dimensions: 11m x 15m x 3.4m
+                const x = (Math.random() - 0.5) * 11;
+                const y = Math.random() * 3.4;
+                const z = (Math.random() - 0.5) * 15;
+
+                positions[i * 3] = x;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = z;
+
+                colors[i * 3] = 0.0;
+                colors[i * 3 + 1] = 0.9;
+                colors[i * 3 + 2] = 1.0;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const material = new THREE.PointsMaterial({ size: 0.05, vertexColors: true, transparent: true, opacity: 0.6 });
+            const pointCloud = new THREE.Points(geometry, material);
+            scene.add(pointCloud);
+        }
+
+        function createNodeMarkers() {
+            const colors = {
+                smart_climate_node: 0x00f0ff,
+                perimeter_monitor: 0xff0055,
+                smart_power_relay: 0x39ff14
+            };
+
+            Object.keys(anchors).forEach(key => {
+                const geom = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+                const mat = new THREE.MeshBasicMaterial({ color: colors[key], wireframe: true });
+                const mesh = new THREE.Mesh(geom, mat);
+
+                mesh.position.set(anchors[key].x, anchors[key].y, anchors[key].z);
+                scene.add(mesh);
+                nodeMarkers[key] = mesh;
+            });
+        }
+
+        function selectDevice(key) {
+            selectedDevice = key;
+            document.querySelectorAll('.device-btn').forEach(btn => btn.classList.remove('active'));
+            if (key === 'smart_climate_node') document.getElementById('btn-climate').classList.add('active');
+            if (key === 'perimeter_monitor') document.getElementById('btn-perimeter').classList.add('active');
+            if (key === 'smart_power_relay') document.getElementById('btn-relay').classList.add('active');
+        }
+
+        function onPointerDown(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            const targetPoint = new THREE.Vector3();
+
+            if (raycaster.ray.intersectPlane(plane, targetPoint)) {
+                anchors[selectedDevice] = {
+                    x: parseFloat(targetPoint.x.toFixed(3)),
+                    y: parseFloat(Math.max(0.2, targetPoint.y + 1.2).toFixed(3)),
+                    z: parseFloat(targetPoint.z.toFixed(3))
+                };
+
+                if (nodeMarkers[selectedDevice]) {
+                    nodeMarkers[selectedDevice].position.set(
+                        anchors[selectedDevice].x,
+                        anchors[selectedDevice].y,
+                        anchors[selectedDevice].z
+                    );
+                }
+
+                document.getElementById('status-msg').innerText = `UPDATED ${selectedDevice.toUpperCase()} POS`;
+            }
+        }
+
+        function saveSpatialMap() {
+            const payload = {
+                map: {
+                    source: "Scaniverse LAS",
+                    version: 1,
+                    origin: LAS_ORIGIN
+                },
+                anchors: anchors
+            };
+
+            fetch('/api/spatial/register-map', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('status-msg').innerText = "SPATIAL MAP SAVED TO RENDER SERVER!";
+            })
+            .catch(err => {
+                document.getElementById('status-msg').innerText = "ERROR SAVING MAP";
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        init();
+    </script>
+</body>
+</html>
