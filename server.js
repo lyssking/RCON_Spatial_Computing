@@ -6,7 +6,14 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+// Initialize Socket.io with CORS enabled for WebAR clients
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
 
 const DB_PATH = path.join(__dirname, 'spatial-db.json');
 
@@ -16,7 +23,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 // ==============================================================
-// DATABASE HELPERS (Safely creates spatial-db.json if missing)
+// DATABASE HELPERS (Safely initializes spatial-db.json)
 // ==============================================================
 function readDB() {
     if (!fs.existsSync(DB_PATH)) {
@@ -68,6 +75,8 @@ app.post('/api/spatial/register', (req, res) => {
 
     writeDB(db);
 
+    console.log(`[ANCHOR REGISTERED] Device: ${deviceId} | Position:`, position);
+
     // Broadcast updated anchor positions to all connected WebAR clients
     io.emit('spatialAnchorsUpdated', db.anchors);
     res.json({ status: 'success', deviceId, position, anchorUUID });
@@ -77,18 +86,22 @@ app.post('/api/spatial/register', (req, res) => {
 // HARDWARE TELEMETRY ROUTES (Receives HTTPS POSTs from Arduinos)
 // ==============================================================
 
-// 1. Climate Node Telemetry (DHT11 / DHT22)
+// 1. Climate Node Telemetry (DHT11 / DHT22 Sensor)
 app.post('/api/telemetry/climate', (req, res) => {
     const { deviceId, temperature, humidity, status } = req.body;
 
-    console.log(`[CLIMATE UPDATE] Temp: ${temperature}°F | Humidity: ${humidity}% | Status: ${status || 'OPTIMAL'}`);
+    const tempVal = temperature !== undefined ? temperature : "--";
+    const humVal = humidity !== undefined ? humidity : "--";
+    const statusVal = status || (parseFloat(tempVal) > 85 ? "OVERHEATING_WARNING" : "OPTIMAL");
+
+    console.log(`[CLIMATE UPDATE] Temp: ${tempVal}°F | Humidity: ${humVal}% | Status: ${statusVal}`);
 
     // Broadcast live telemetry update to WebAR Quest HUD
     io.emit('climateStateUpdate', {
         deviceId: deviceId || 'smart_climate_node',
-        temperature: temperature !== undefined ? temperature : "--",
-        humidity: humidity !== undefined ? humidity : "--",
-        status: status || (temperature > 85 ? "OVERHEATING_WARNING" : "OPTIMAL")
+        temperature: tempVal,
+        humidity: humVal,
+        status: statusVal
     });
 
     res.json({ status: "success", message: "Climate telemetry processed" });
@@ -98,14 +111,17 @@ app.post('/api/telemetry/climate', (req, res) => {
 app.post('/api/telemetry/safety', (req, res) => {
     const { deviceId, distance, perimeter } = req.body;
 
-    console.log(`[PERIMETER UPDATE] Distance: ${distance} in | State: ${perimeter}`);
+    const distVal = distance !== undefined ? distance : 0;
+    const stateVal = perimeter || (distVal > 0 && distVal < 12 ? "BREACH_ALERT" : "SECURE");
+
+    console.log(`[PERIMETER UPDATE] Distance: ${distVal} in | State: ${stateVal}`);
 
     // Broadcast live perimeter alert to WebAR Quest HUD
     io.emit('twinStateUpdate', {
         perimeter_monitor: {
-            perimeter: perimeter || (distance > 0 && distance < 12 ? "BREACH_ALERT" : "SECURE"),
-            distance: distance !== undefined ? distance : 0,
-            breachCount: (distance > 0 && distance < 12) ? 1 : 0
+            perimeter: stateVal,
+            distance: distVal,
+            breachCount: stateVal === "BREACH_ALERT" ? 1 : 0
         }
     });
 
@@ -128,8 +144,10 @@ app.post('/api/telemetry/relay', (req, res) => {
     res.json({ status: "success", message: "Power relay telemetry processed" });
 });
 
-// Manual Test Broadcast Route (Trigger from desktop browser or phone to verify WebAR HUDs)
+// Manual Diagnostic Endpoint (Trigger from any browser to test WebAR HUD updates)
 app.get('/api/test-telemetry', (req, res) => {
+    console.log("[TEST TELEMETRY TRIGGERED]");
+
     io.emit('climateStateUpdate', {
         temperature: "76.4",
         humidity: "42.0",
@@ -141,7 +159,7 @@ app.get('/api/test-telemetry', (req, res) => {
         smart_power_relay: { status: "ON", powerDraw: "0.18" }
     });
 
-    res.send("Test telemetry broadcast emitted successfully!");
+    res.send("Test telemetry broadcast emitted to all WebAR clients!");
 });
 
 // ==============================================================
