@@ -9,7 +9,6 @@
     <style>
         html, body, .a-canvas {
             background-color: transparent !important;
-            background: transparent !important;
             margin: 0; padding: 0; overflow: hidden;
             width: 100%; height: 100%;
         }
@@ -18,22 +17,19 @@
             padding: 16px 28px; background: #00f0ff; color: #000;
             border: none; border-radius: 8px; font-family: monospace;
             font-weight: bold; font-size: 18px; cursor: pointer;
-            box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
         }
     </style>
 </head>
-<body style="margin: 0; overflow: hidden; background-color: transparent !important; background: transparent !important;">
+<body style="margin: 0; overflow: hidden; background-color: transparent !important;">
 
-    <button id="custom-ar-btn">ENTER NOEMATA AR VIEWER</button>
+    <button id="custom-ar-btn">ENTER AR VIEWER</button>
 
     <script>
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
                 const setTransparent = () => {
-                    if (scene.renderer) {
-                        scene.renderer.setClearColor(0x000000, 0);
-                    }
+                    if (scene.renderer) scene.renderer.setClearColor(0x000000, 0);
                 };
                 scene.addEventListener('render-target-loaded', setTransparent);
                 scene.addEventListener('enter-vr', setTransparent);
@@ -41,28 +37,24 @@
         });
     </script>
 
-    <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: anchors, unbounded; referenceSpaceType: local-floor;"
+    <a-scene webxr="requiredFeatures: hit-test, local-floor, anchors; referenceSpaceType: local-floor;"
              force-passthrough
              renderer="alpha: true; colorManagement: true; antialias: true;"
              xr-mode-ui="enabled: false">
         
-        <a-entity light="type: ambient; color: #ffffff; intensity: 2.0;"></a-entity>
-
-        <!-- Camera & Gaze Reticle -->
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
                 <a-entity id="hud-pointer"
                           raycaster="objects: .gaze-target; far: 10;"
                           cursor="fuse: false;" position="0 0 -1"
                           geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
-                          material="color: #00f0ff; shader: flat; opacity: 0.9;">
+                          material="color: #00f0ff; shader: flat; opacity: 0.8;">
                 </a-entity>
             </a-entity>
         </a-entity>
 
-        <!-- CANONICAL NOEMATA SPATIAL NODES -->
         <!-- 1. SMART CLIMATE NODE -->
-        <a-entity class="gaze-target" id="smart-climate-asset" position="1.2 1.4 -2.1">
+        <a-entity class="gaze-target" id="smart-climate-asset" position="0 1.4 -1.2">
             <a-box width="0.2" height="0.2" depth="0.2" material="color: #00f0ff; shader: flat; wireframe: true;"></a-box>
             <a-text value="[ CLIMATE NODE ]" position="0 0.22 0" width="1.4" align="center" color="#00f0ff" font="monoid"></a-text>
 
@@ -74,7 +66,7 @@
         </a-entity>
 
         <!-- 2. PERIMETER MONITOR -->
-        <a-entity class="gaze-target" id="perimeter-monitor-asset" position="-2.5 1.2 3.8">
+        <a-entity class="gaze-target" id="perimeter-monitor-asset" position="-0.6 1.4 -1.5">
             <a-cylinder radius="0.15" height="0.22" material="color: #00f0ff; shader: flat; wireframe: true;"></a-cylinder>
             <a-text value="[ PERIMETER GUARD ]" position="0 0.24 0" width="1.4" align="center" color="#64748b" font="monoid"></a-text>
 
@@ -86,7 +78,7 @@
         </a-entity>
 
         <!-- 3. SMART POWER RELAY -->
-        <a-entity class="gaze-target" id="smart-relay-asset" position="2.1 1.5 4.2">
+        <a-entity class="gaze-target" id="smart-relay-asset" position="0.6 1.4 -1.5">
             <a-box width="0.18" height="0.18" depth="0.18" material="color: #64748b; shader: flat; wireframe: true;"></a-box>
             <a-text value="[ POWER RELAY ]" position="0 0.22 0" width="1.4" align="center" color="#64748b" font="monoid"></a-text>
 
@@ -101,34 +93,54 @@
 
     <script>
         const socket = io();
+        const sceneEl = document.querySelector('a-scene');
 
-        function applyRegisteredAnchors(map) {
-            if (!map) return;
+        async function restorePersistentAnchors(dbMap) {
+            const session = sceneEl.xrSession;
+
             const targets = [
                 { key: 'smart_climate_node', elementId: 'smart-climate-asset' },
                 { key: 'perimeter_monitor', elementId: 'perimeter-monitor-asset' },
                 { key: 'smart_power_relay', elementId: 'smart-relay-asset' }
             ];
 
-            targets.forEach(item => {
-                const data = map[item.key];
+            for (const item of targets) {
+                const data = dbMap[item.key];
                 const el = document.getElementById(item.elementId);
-                if (data && el && data.x !== undefined) {
-                    el.setAttribute('position', `${data.x} ${data.y} ${data.z}`);
+
+                if (data && el) {
+                    let restored = false;
+
+                    // 1. Attempt Quest Hardware Spatial Anchor Restoration
+                    if (session && data.anchorUUID && session.restorePersistentAnchor) {
+                        try {
+                            const anchor = await session.restorePersistentAnchor(data.anchorUUID);
+                            if (anchor) {
+                                restored = true;
+                                console.log(`[HARDWARE ANCHOR RESTORED] ${item.key}`);
+                            }
+                        } catch (err) {
+                            console.warn(`[ANCHOR RESTORE FALLBACK] ${item.key}:`, err);
+                        }
+                    }
+
+                    // 2. Fallback to coordinate position
+                    if (!restored && data.x !== undefined) {
+                        el.setAttribute('position', `${data.x} ${data.y} ${data.z}`);
+                    }
                 }
-            });
+            }
         }
 
-        // Fetch Canonical Spatial Map
         fetch('/api/spatial/map')
             .then(res => res.json())
             .then(db => {
-                const anchorMap = db.anchors || db;
-                applyRegisteredAnchors(anchorMap);
-            })
-            .catch(err => console.error("Map Fetch Error:", err));
+                const map = db.anchors || db;
+                sceneEl.addEventListener('enter-vr', () => restorePersistentAnchors(map));
+                restorePersistentAnchors(map);
+            });
 
-        socket.on('spatialAnchorsUpdated', (anchors) => applyRegisteredAnchors(anchors));
+        socket.on('spatialAnchorsUpdated', (anchors) => restorePersistentAnchors(anchors));
 
         // Hover gaze interaction
         document.querySelectorAll('.gaze-target').forEach(el => {
@@ -147,7 +159,7 @@
             });
         });
 
-        // Real-time telemetry updates
+        // Socket telemetry
         socket.on('climateStateUpdate', (data) => {
             const tempText = document.getElementById('popup-climate-temp');
             const statusText = document.getElementById('popup-climate-status');
@@ -173,17 +185,9 @@
         });
 
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
-            const sceneEl = document.querySelector('a-scene');
-            const button = document.getElementById('custom-ar-btn');
-
-            const launch = () => {
-                if (sceneEl.enterAR) sceneEl.enterAR();
-                else if (sceneEl.enterVR) sceneEl.enterVR();
-                button.style.display = 'none';
-            };
-
-            if (sceneEl.hasLoaded) launch();
-            else sceneEl.addEventListener('loaded', launch);
+            if (sceneEl.enterAR) sceneEl.enterAR();
+            else sceneEl.enterVR();
+            document.getElementById('custom-ar-btn').style.display = 'none';
         });
     </script>
 </body>
