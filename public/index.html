@@ -54,8 +54,9 @@
         </a-entity>
 
         <!-- 1. SMART CLIMATE NODE -->
-        <a-entity class="gaze-target" id="smart-climate-asset" position="0 1.4 -1.2">
-            <a-box width="0.2" height="0.2" depth="0.2" material="color: #00f0ff; shader: flat; wireframe: true;"></a-box>
+        <a-entity id="smart-climate-asset" position="0 1.4 -1.2">
+            <!-- Class gaze-target moved directly to mesh geometry -->
+            <a-box class="gaze-target" width="0.2" height="0.2" depth="0.2" material="color: #00f0ff; shader: flat; wireframe: true;"></a-box>
             <a-text value="[ CLIMATE NODE ]" position="0 0.22 0" width="1.4" align="center" color="#00f0ff" font="monoid"></a-text>
 
             <a-entity class="info-card" position="0 0.38 0" visible="false" scale="0.001 0.001 0.001">
@@ -66,8 +67,8 @@
         </a-entity>
 
         <!-- 2. PERIMETER MONITOR -->
-        <a-entity class="gaze-target" id="perimeter-monitor-asset" position="-0.6 1.4 -1.5">
-            <a-cylinder radius="0.15" height="0.22" material="color: #00f0ff; shader: flat; wireframe: true;"></a-cylinder>
+        <a-entity id="perimeter-monitor-asset" position="-0.6 1.4 -1.5">
+            <a-cylinder class="gaze-target" radius="0.15" height="0.22" material="color: #00f0ff; shader: flat; wireframe: true;"></a-cylinder>
             <a-text value="[ PERIMETER GUARD ]" position="0 0.24 0" width="1.4" align="center" color="#64748b" font="monoid"></a-text>
 
             <a-entity class="info-card" position="0 0.38 0" visible="false" scale="0.001 0.001 0.001">
@@ -78,8 +79,8 @@
         </a-entity>
 
         <!-- 3. SMART POWER RELAY -->
-        <a-entity class="gaze-target" id="smart-relay-asset" position="0.6 1.4 -1.5">
-            <a-box width="0.18" height="0.18" depth="0.18" material="color: #64748b; shader: flat; wireframe: true;"></a-box>
+        <a-entity id="smart-relay-asset" position="0.6 1.4 -1.5">
+            <a-box class="gaze-target" width="0.18" height="0.18" depth="0.18" material="color: #64748b; shader: flat; wireframe: true;"></a-box>
             <a-text value="[ POWER RELAY ]" position="0 0.22 0" width="1.4" align="center" color="#64748b" font="monoid"></a-text>
 
             <a-entity class="info-card" position="0 0.38 0" visible="false" scale="0.001 0.001 0.001">
@@ -111,20 +112,15 @@
                 if (data && el) {
                     let restored = false;
 
-                    // 1. Attempt Quest Hardware Spatial Anchor Restoration
                     if (session && data.anchorUUID && session.restorePersistentAnchor) {
                         try {
                             const anchor = await session.restorePersistentAnchor(data.anchorUUID);
-                            if (anchor) {
-                                restored = true;
-                                console.log(`[HARDWARE ANCHOR RESTORED] ${item.key}`);
-                            }
+                            if (anchor) restored = true;
                         } catch (err) {
-                            console.warn(`[ANCHOR RESTORE FALLBACK] ${item.key}:`, err);
+                            console.warn(`[ANCHOR FALLBACK] ${item.key}`);
                         }
                     }
 
-                    // 2. Fallback to coordinate position
                     if (!restored && data.x !== undefined) {
                         el.setAttribute('position', `${data.x} ${data.y} ${data.z}`);
                     }
@@ -142,16 +138,19 @@
 
         socket.on('spatialAnchorsUpdated', (anchors) => restorePersistentAnchors(anchors));
 
-        // Hover gaze interaction
-        document.querySelectorAll('.gaze-target').forEach(el => {
-            const card = el.querySelector('.info-card');
-            el.addEventListener('raycaster-intersected', () => {
+        // Direct mesh hover listeners for HUD popups
+        document.querySelectorAll('.gaze-target').forEach(targetEl => {
+            const parentNode = targetEl.parentElement;
+            const card = parentNode.querySelector('.info-card');
+
+            targetEl.addEventListener('raycaster-intersected', () => {
                 if (card) {
                     card.setAttribute('visible', 'true');
                     card.setAttribute('scale', '1 1 1');
                 }
             });
-            el.addEventListener('raycaster-intersected-cleared', () => {
+
+            targetEl.addEventListener('raycaster-intersected-cleared', () => {
                 if (card) {
                     card.setAttribute('visible', 'false');
                     card.setAttribute('scale', '0.001 0.001 0.001');
