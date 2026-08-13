@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOEMATA // WEBXR MARKER + GAZE SETUP</title>
+    <title>NOEMATA // SPATIAL GAZE LOCK SETUP</title>
     
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -53,16 +53,16 @@
 
     <div id="hud-control-banner">
         <div id="hud-title">TARGET: SMART CLIMATE NODE</div>
-        <div id="hud-status">ENTER AR & SCAN MARKER TO LOCK ORIGIN</div>
+        <div id="hud-status">GAZE AT SURFACE & PULL TRIGGER TO LOCK</div>
     </div>
 
     <div id="action-overlay">
         <button class="action-btn" onclick="toggleActiveDevice()">[ NEXT DEVICE ]</button>
-        <button class="action-btn" id="save-btn" onclick="saveLockedAnchor()">[ COMMIT TO DB ]</button>
+        <button class="action-btn" id="save-btn" onclick="saveActiveAnchor()">[ COMMIT TO DB ]</button>
     </div>
 
     <script>
-        // Force Canvas Alpha Transparency for Quest Passthrough
+        // Force Canvas Alpha Transparency for WebXR Passthrough
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -77,45 +77,57 @@
             }
         });
 
-        // WebXR Surface Hit-Test Listener (Snaps Bounding Box to Physical Walls/Desks)
-        AFRAME.registerComponent('native-surface-hit-test', {
+        // Bounding Box Tracking System
+        AFRAME.registerComponent('spatial-box-tracker', {
             init: function () {
                 this.placementBox = document.querySelector('#placement-guide-box');
-                this.spatialAnchor = document.querySelector('#noemata-spatial-anchor').object3D;
+                this.pointer = document.querySelector('#hud-pointer');
+                this.camera = document.querySelector('#main-camera');
             },
             tick: function () {
-                if (!this.placementBox) return;
+                if (!this.pointer || !this.placementBox || !this.camera) return;
 
-                const raycaster = document.querySelector('#hud-pointer').components.raycaster;
+                const raycaster = this.pointer.components.raycaster;
                 if (!raycaster) return;
 
-                const intersection = raycaster.getIntersection(document.querySelector('.placement-surface'));
-                if (intersection) {
-                    const hitPoint = intersection.point.clone();
-                    
-                    // Transform world coordinates into paper marker local offset
-                    const localHit = hitPoint.clone();
-                    this.spatialAnchor.worldToLocal(localHit);
+                // Raycast against the floating pitch plane
+                const intersections = raycaster.getIntersections();
+                if (intersections.length > 0) {
+                    const hitPoint = intersections[0].point;
 
+                    // Update guide box position to match hit point
                     this.placementBox.object3D.position.copy(hitPoint);
                     this.placementBox.setAttribute('visible', 'true');
-                    window.currentGazeLocalPoint = localHit;
+
+                    window.currentGazePoint = hitPoint.clone();
+                } else {
+                    // Fallback: Project box 1.5 meters directly ahead of camera
+                    const camObj = this.camera.object3D;
+                    const dir = new THREE.Vector3(0, 0, -1.5).applyQuaternion(camObj.quaternion);
+                    const fallbackPos = camObj.position.clone().add(dir);
+
+                    this.placementBox.object3D.position.copy(fallbackPos);
+                    this.placementBox.setAttribute('visible', 'true');
+
+                    window.currentGazePoint = fallbackPos.clone();
                 }
             }
         });
 
-        // Trigger Click Listener to Lock Selected Object Position
+        // Trigger Click Listener to Commit Spatial Pose
         AFRAME.registerComponent('trigger-lock-listener', {
             init: function () {
                 this.el.addEventListener('click', () => {
-                    if (window.currentGazeLocalPoint) {
+                    if (window.currentGazePoint) {
                         const activeKey = window.devices[window.currentDeviceIndex].key;
-                        const pt = window.currentGazeLocalPoint;
+                        const pt = window.currentGazePoint;
 
-                        window.lockedPositions[activeKey] = {
-                            x: parseFloat(pt.x.toFixed(2)),
-                            y: parseFloat(pt.y.toFixed(2)),
-                            z: parseFloat(pt.z.toFixed(2))
+                        window.activeAnchors[activeKey] = {
+                            position: {
+                                x: parseFloat(pt.x.toFixed(2)),
+                                y: parseFloat(pt.y.toFixed(2)),
+                                z: parseFloat(pt.z.toFixed(2))
+                            }
                         };
 
                         const previewEl = document.getElementById(`${activeKey}-preview`);
@@ -123,19 +135,9 @@
                             previewEl.setAttribute('position', `${pt.x} ${pt.y} ${pt.z}`);
                         }
 
-                        document.getElementById('hud-status').innerText = `LOCKED: (${pt.x.toFixed(2)}, ${pt.y.toFixed(2)}, ${pt.z.toFixed(2)})`;
+                        document.getElementById('hud-status').innerText = `LOCKED ${activeKey.toUpperCase()}: (${pt.x.toFixed(2)}, ${pt.y.toFixed(2)}, ${pt.z.toFixed(2)})`;
                         document.getElementById('hud-status').style.color = '#39ff14';
                     }
-                });
-            }
-        });
-
-        // Native WebXR Image Tracking Listener for Printed Target Paper
-        AFRAME.registerComponent('webxr-image-anchor', {
-            init: function () {
-                this.el.sceneEl.addEventListener('ar-hit-test-achieved', () => {
-                    document.getElementById('hud-status').innerText = "MARKER TRACKED // GAZE AT SURFACE & PULL TRIGGER";
-                    document.getElementById('hud-status').style.color = "#39ff14";
                 });
             }
         });
@@ -143,14 +145,18 @@
 
     <a-scene 
         force-passthrough
-        native-surface-hit-test
-        webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: image-tracking; referenceSpaceType: local-floor;"
+        spatial-box-tracker
+        webxr="requiredFeatures: hit-test, local-floor; referenceSpaceType: local-floor;"
         renderer="colorManagement: true; antialias: true; alpha: true;" 
         xr-mode-ui="enabled: false">
 
         <!-- Camera Rig & Cursor Pointer -->
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
+                
+                <!-- Raycaster Target Plane (Always 2 meters ahead of camera view) -->
+                <a-plane class="placement-surface" position="0 0 -2" width="10" height="10" visible="false"></a-plane>
+
                 <a-entity id="hud-pointer"
                           trigger-lock-listener
                           raycaster="objects: .placement-surface; far: 10;"
@@ -163,33 +169,27 @@
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
-        <!-- Dynamic Surface Hit-Test Zone -->
-        <a-sphere class="placement-surface" position="0 1.6 -2" radius="8" visible="false"></a-sphere>
-
-        <!-- Floating Wireframe Guide Box (Snaps to surfaces) -->
+        <!-- Dynamic Wireframe Guide Box (Follows gaze in AR) -->
         <a-box id="placement-guide-box" width="0.25" height="0.25" depth="0.25" 
-               material="color: #39ff14; wireframe: true; opacity: 0.8; shader: flat;" visible="false">
+               material="color: #39ff14; wireframe: true; opacity: 0.9; shader: flat;" visible="false">
         </a-box>
 
-        <!-- MARKER ORIGIN SPATIAL ANCHOR (0,0,0) -->
-        <a-entity id="noemata-spatial-anchor" webxr-image-anchor position="0 1.2 -1">
-
-            <!-- PREVIEW HARDWARE NODES -->
-            <a-entity id="smart_climate_node-preview" position="0 0.25 0">
+        <!-- HARDWARE PREVIEW NODES -->
+        <a-entity id="noemata-spatial-anchor">
+            <a-entity id="smart_climate_node-preview" position="0 1.4 -1.2">
                 <a-box width="0.18" height="0.18" depth="0.18" material="color: #00f0ff; shader: flat; wireframe: true;"></a-box>
                 <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
             </a-entity>
 
-            <a-entity id="perimeter_monitor-preview" position="-0.45 0.25 0">
+            <a-entity id="perimeter_monitor-preview" position="-0.6 1.4 -1.5">
                 <a-cylinder radius="0.12" height="0.18" material="color: #00f0ff; shader: flat; wireframe: true;"></a-cylinder>
                 <a-text value="[ PERIMETER GUARD ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
             </a-entity>
 
-            <a-entity id="smart_power_relay-preview" position="0.45 0.25 0">
+            <a-entity id="smart_power_relay-preview" position="0.6 1.4 -1.5">
                 <a-box width="0.15" height="0.15" depth="0.15" material="color: #64748b; shader: flat; wireframe: true;"></a-box>
                 <a-text value="[ POWER RELAY ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
             </a-entity>
-
         </a-entity>
 
     </a-scene>
@@ -197,7 +197,8 @@
     <script>
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
 
-        window.currentGazeLocalPoint = null;
+        window.currentGazePoint = null;
+        window.activeAnchors = {};
         window.devices = [
             { key: 'smart_climate_node', title: 'TARGET: SMART CLIMATE NODE' },
             { key: 'perimeter_monitor', title: 'TARGET: PERIMETER MONITOR' },
@@ -205,24 +206,13 @@
         ];
         window.currentDeviceIndex = 0;
 
-        window.lockedPositions = {
-            smart_climate_node: { x: 0.0, y: 0.25, z: 0.0 },
-            perimeter_monitor: { x: -0.45, y: 0.25, z: 0.0 },
-            smart_power_relay: { x: 0.45, y: 0.25, z: 0.0 }
-        };
-
-        // Fetch DB coordinates on load
+        // Fetch stored DB anchors on load
         fetch('/api/spatial/map')
             .then(res => res.json())
             .then(db => {
                 const map = db.anchors || db;
                 window.devices.forEach(item => {
                     if (map[item.key] && map[item.key].x !== undefined) {
-                        window.lockedPositions[item.key] = {
-                            x: parseFloat(map[item.key].x),
-                            y: parseFloat(map[item.key].y),
-                            z: parseFloat(map[item.key].z)
-                        };
                         const previewEl = document.getElementById(`${item.key}-preview`);
                         if (previewEl) {
                             previewEl.setAttribute('position', `${map[item.key].x} ${map[item.key].y} ${map[item.key].z}`);
@@ -239,16 +229,25 @@
             document.getElementById('hud-status').style.color = '#00f0ff';
         }
 
-        function saveLockedAnchor() {
+        function saveActiveAnchor() {
             const activeKey = window.devices[window.currentDeviceIndex].key;
-            const pos = window.lockedPositions[activeKey];
+            const anchorData = window.activeAnchors[activeKey];
 
-            document.getElementById('hud-status').innerText = 'SAVING TO RENDER DB...';
+            if (!anchorData || !anchorData.position) {
+                document.getElementById('hud-status').innerText = 'PULL TRIGGER TO LOCK SPOT FIRST!';
+                document.getElementById('hud-status').style.color = '#ff0055';
+                return;
+            }
+
+            document.getElementById('hud-status').innerText = 'COMMITTING ANCHOR TO DB...';
 
             fetch('/api/spatial/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ deviceId: activeKey, position: pos })
+                body: JSON.stringify({ 
+                    deviceId: activeKey, 
+                    position: anchorData.position
+                })
             })
             .then(res => res.json())
             .then(() => {
@@ -256,19 +255,15 @@
                 document.getElementById('hud-status').style.color = '#39ff14';
             })
             .catch(() => {
-                document.getElementById('hud-status').innerText = 'ERROR SAVING TO DB';
+                document.getElementById('hud-status').innerText = 'ERROR COMMITTING ANCHOR';
                 document.getElementById('hud-status').style.color = '#ff0055';
             });
         }
 
-        // Direct gesture launcher for Meta Quest Browser
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const sceneEl = document.querySelector('a-scene');
-            if (sceneEl.enterAR) {
-                sceneEl.enterAR();
-            } else if (sceneEl.enterVR) {
-                sceneEl.enterVR();
-            }
+            if (sceneEl.enterAR) sceneEl.enterAR();
+            else if (sceneEl.enterVR) sceneEl.enterVR();
             document.getElementById('custom-ar-btn').style.display = 'none';
         });
     </script>
