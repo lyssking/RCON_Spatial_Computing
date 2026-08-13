@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOEMATA // SPATIAL GAZE LOCK SETUP</title>
+    <title>NOEMATA // SURFACE SNAP SETUP</title>
     
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -53,7 +53,7 @@
 
     <div id="hud-control-banner">
         <div id="hud-title">TARGET: SMART CLIMATE NODE</div>
-        <div id="hud-status">GAZE AT SURFACE & PULL TRIGGER TO LOCK</div>
+        <div id="hud-status">SCANNING SURFACES... AIM AT WALL OR DESK</div>
     </div>
 
     <div id="action-overlay">
@@ -62,7 +62,6 @@
     </div>
 
     <script>
-        // Force Canvas Alpha Transparency for WebXR Passthrough
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -77,46 +76,70 @@
             }
         });
 
-        // Independent Gaze Tracker - Positions Guide Box directly in front of view direction
-        AFRAME.registerComponent('spatial-box-tracker', {
+        // WebXR Surface Hit-Testing Component (Snaps box directly onto physical room geometry)
+        AFRAME.registerComponent('webxr-surface-snapper', {
             init: function () {
+                this.hitTestSource = null;
                 this.placementBox = document.querySelector('#placement-guide-box');
                 this.reticleRing = document.querySelector('#hud-reticle');
-                this.cameraEl = document.querySelector('#main-camera');
-                this.vector = new THREE.Vector3();
-                this.dir = new THREE.Vector3();
+                
+                this.el.sceneEl.addEventListener('enter-vr', async () => {
+                    const session = this.el.sceneEl.xrSession;
+                    if (!session) return;
+
+                    try {
+                        const viewerSpace = await session.requestReferenceSpace('viewer');
+                        this.hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
+                        console.log("[WEBXR HIT TEST SOURCE CREATED]");
+                    } catch (err) {
+                        console.warn("[WEBXR HIT TEST ERROR]", err);
+                    }
+                });
             },
-            tick: function () {
-                if (!this.cameraEl || !this.placementBox) return;
+            tick: function (time, timeDelta) {
+                const frame = this.el.sceneEl.frame;
+                const refSpace = this.el.sceneEl.systems.webxr.referenceSpace;
 
-                const cameraObj = this.cameraEl.object3D;
+                if (frame && this.hitTestSource && refSpace) {
+                    const hitTestResults = frame.getHitTestResults(this.hitTestSource);
+                    if (hitTestResults.length > 0) {
+                        const hit = hitTestResults[0];
+                        const pose = hit.getPose(refSpace);
 
-                // Get forward gaze vector from current head rotation
-                this.dir.set(0, 0, -1.8).applyQuaternion(cameraObj.quaternion);
-                this.vector.copy(cameraObj.position).add(this.dir);
+                        if (pose) {
+                            const pos = pose.transform.position;
+                            const orientation = pose.transform.orientation;
 
-                // Update Guide Box Position
-                this.placementBox.object3D.position.copy(this.vector);
-                this.placementBox.setAttribute('visible', 'true');
+                            // Snap Guide Box directly to physical surface point
+                            this.placementBox.object3D.position.set(pos.x, pos.y, pos.z);
+                            this.placementBox.object3D.quaternion.set(orientation.x, orientation.y, orientation.z, orientation.w);
+                            this.placementBox.setAttribute('visible', 'true');
 
-                // Update Reticle Ring Position (1 meter ahead)
-                if (this.reticleRing) {
-                    const reticleDir = new THREE.Vector3(0, 0, -1.0).applyQuaternion(cameraObj.quaternion);
-                    const reticlePos = cameraObj.position.clone().add(reticleDir);
-                    this.reticleRing.object3D.position.copy(reticlePos);
-                    this.reticleRing.object3D.quaternion.copy(cameraObj.quaternion);
-                    this.reticleRing.setAttribute('visible', 'true');
+                            if (this.reticleRing) {
+                                this.reticleRing.object3D.position.set(pos.x, pos.y, pos.z);
+                                this.reticleRing.object3D.quaternion.set(orientation.x, orientation.y, orientation.z, orientation.w);
+                                this.reticleRing.setAttribute('visible', 'true');
+                            }
+
+                            window.currentGazePoint = { x: pos.x, y: pos.y, z: pos.z };
+
+                            const statusEl = document.getElementById('hud-status');
+                            if (statusEl && window.deviceSelected) {
+                                statusEl.innerText = "SURFACE SNAPPED! PULL TRIGGER TO LOCK";
+                                statusEl.style.color = "#39ff14";
+                            }
+                        }
+                    }
                 }
-
-                window.currentGazePoint = this.vector.clone();
             }
         });
 
-        // Trigger Click Listener (Handles Controller Trigger / Screen Tap)
+        // Controller / Screen Click Listener to Lock Selected Object Position
         AFRAME.registerComponent('trigger-lock-listener', {
             init: function () {
                 window.addEventListener('click', () => {
                     if (window.currentGazePoint) {
+                        window.deviceSelected = true;
                         const activeKey = window.devices[window.currentDeviceIndex].key;
                         const pt = window.currentGazePoint;
 
@@ -143,7 +166,7 @@
 
     <a-scene 
         force-passthrough
-        spatial-box-tracker
+        webxr-surface-snapper
         trigger-lock-listener
         webxr="requiredFeatures: hit-test, local-floor; referenceSpaceType: local-floor;"
         renderer="colorManagement: true; antialias: true; alpha: true;" 
@@ -156,12 +179,12 @@
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
-        <!-- Center Gaze Reticle Ring -->
-        <a-ring id="hud-reticle" radius-inner="0.01" radius-outer="0.02" 
+        <!-- Surface Snapping Reticle Ring -->
+        <a-ring id="hud-reticle" radius-inner="0.04" radius-outer="0.06" rotation="-90 0 0"
                 material="color: #00f0ff; shader: flat; opacity: 0.9; depthTest: false;" visible="false">
         </a-ring>
 
-        <!-- Dynamic Wireframe Guide Box (Follows Gaze) -->
+        <!-- Dynamic Wireframe Guide Box (Snaps to real-world surfaces) -->
         <a-box id="placement-guide-box" width="0.25" height="0.25" depth="0.25" 
                material="color: #39ff14; wireframe: true; opacity: 0.95; shader: flat; depthTest: false;" visible="false">
         </a-box>
@@ -190,6 +213,7 @@
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
 
         window.currentGazePoint = null;
+        window.deviceSelected = false;
         window.activeAnchors = {};
         window.devices = [
             { key: 'smart_climate_node', title: 'TARGET: SMART CLIMATE NODE' },
@@ -198,7 +222,6 @@
         ];
         window.currentDeviceIndex = 0;
 
-        // Fetch stored DB anchors on load
         fetch('/api/spatial/map')
             .then(res => res.json())
             .then(db => {
@@ -217,7 +240,7 @@
             window.currentDeviceIndex = (window.currentDeviceIndex + 1) % window.devices.length;
             const current = window.devices[window.currentDeviceIndex];
             document.getElementById('hud-title').innerText = current.title;
-            document.getElementById('hud-status').innerText = 'GAZE AT SURFACE & PULL TRIGGER TO LOCK';
+            document.getElementById('hud-status').innerText = 'AIM AT WALL OR DESK & PULL TRIGGER';
             document.getElementById('hud-status').style.color = '#00f0ff';
         }
 
