@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOEMATA // 3D AR AUTHORING TOOL</title>
+    <title>NOEMATA // SPATIAL SURFACE LOCK SETUP</title>
     
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -14,22 +14,55 @@
             overflow: hidden; background-color: transparent !important;
             background: transparent !important;
         }
-        #custom-ar-btn {
-            position: absolute; bottom: 30px; right: 30px; z-index: 99999;
-            padding: 18px 32px; background: #00f0ff; color: #000;
-            border: none; border-radius: 8px; font-family: monospace;
-            font-weight: bold; font-size: 18px; cursor: pointer;
-            box-shadow: 0 0 25px rgba(0, 240, 255, 0.8);
+        
+        #hud-control-banner {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 99999;
+            background: rgba(13, 17, 23, 0.92); border: 1px solid #00f0ff;
+            border-radius: 8px; padding: 12px 20px; color: #00f0ff;
+            font-family: monospace; text-align: center; width: 340px;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.3); pointer-events: none;
         }
+        #hud-title { font-weight: bold; font-size: 14px; margin-bottom: 4px; color: #fff; }
+        #hud-status { font-size: 12px; color: #00f0ff; }
+
+        #custom-ar-btn {
+            position: absolute; bottom: 25px; right: 25px; z-index: 99999;
+            padding: 16px 28px; background: #00f0ff; color: #000;
+            border: none; border-radius: 8px; font-family: monospace;
+            font-weight: bold; font-size: 16px; cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+        }
+
+        #action-overlay {
+            position: absolute; bottom: 30px; left: 30px; z-index: 99999;
+            display: flex; gap: 12px;
+        }
+        .action-btn {
+            padding: 12px 20px; background: #161b22; border: 1px solid #00f0ff;
+            color: #00f0ff; font-family: monospace; font-weight: bold;
+            border-radius: 6px; cursor: pointer; font-size: 13px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+        .action-btn:active { background: #00f0ff; color: #000; }
+        #save-btn { background: #238636; border-color: #2ea043; color: #fff; }
     </style>
 </head>
 <body style="margin: 0; overflow: hidden; background-color: transparent !important;">
 
-    <!-- 2D LAUNCH BUTTON (Disappears when entering AR) -->
     <button id="custom-ar-btn">ENTER QUEST PASSTHROUGH AR</button>
 
+    <div id="hud-control-banner">
+        <div id="hud-title">TARGET: SMART CLIMATE NODE</div>
+        <div id="hud-status">GAZE AT SURFACE & PULL TRIGGER TO LOCK</div>
+    </div>
+
+    <div id="action-overlay">
+        <button class="action-btn" onclick="toggleActiveDevice()">[ NEXT DEVICE ]</button>
+        <button class="action-btn" id="save-btn" onclick="saveActiveAnchor()">[ COMMIT TO DB ]</button>
+    </div>
+
     <script>
-        // Force Canvas Alpha Transparency for WebXR Passthrough
+        // Transparent Canvas Configuration for Quest WebXR Passthrough
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -44,8 +77,8 @@
             }
         });
 
-        // WebXR Surface Hit-Testing (Snaps Green Box to Real Walls/Desks/Floors)
-        AFRAME.registerComponent('webxr-surface-snapper', {
+        // Surface Hit-Testing & Green Bounding Box Snap Component
+        AFRAME.registerComponent('surface-snap-tracker', {
             init: function () {
                 this.hitTestSource = null;
                 this.placementBox = document.querySelector('#placement-guide-box');
@@ -58,7 +91,6 @@
                     try {
                         const viewerSpace = await session.requestReferenceSpace('viewer');
                         this.hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
-                        console.log("[WEBXR HIT TEST SOURCE CREATED]");
                     } catch (err) {
                         console.warn("[WEBXR HIT TEST ERROR]", err);
                     }
@@ -78,7 +110,7 @@
                             const pos = pose.transform.position;
                             const orientation = pose.transform.orientation;
 
-                            // Snap Guide Box & Reticle to physical room surfaces
+                            // Snap Guide Box & Reticle Ring directly to room surface
                             this.placementBox.object3D.position.set(pos.x, pos.y, pos.z);
                             this.placementBox.object3D.quaternion.set(orientation.x, orientation.y, orientation.z, orientation.w);
                             this.placementBox.setAttribute('visible', 'true');
@@ -96,73 +128,12 @@
             }
         });
 
-        // Global State & Helper Functions
-        window.currentGazePoint = null;
-        window.activeAnchors = {};
-        window.devices = [
-            { key: 'smart_climate_node', title: 'TARGET: SMART CLIMATE NODE' },
-            { key: 'perimeter_monitor', title: 'TARGET: PERIMETER MONITOR' },
-            { key: 'smart_power_relay', title: 'TARGET: SMART POWER RELAY' }
-        ];
-        window.currentDeviceIndex = 0;
-
-        function update3DHUDText(text, color = "#00f0ff") {
-            const statusEl = document.querySelector('#hud-3d-status');
-            if (statusEl) {
-                statusEl.setAttribute('value', text);
-                statusEl.setAttribute('color', color);
-            }
-        }
-
-        function update3DTitleText(text) {
-            const titleEl = document.querySelector('#hud-3d-title');
-            if (titleEl) {
-                titleEl.setAttribute('value', text);
-            }
-        }
-
-        function toggleActiveDevice() {
-            window.currentDeviceIndex = (window.currentDeviceIndex + 1) % window.devices.length;
-            const current = window.devices[window.currentDeviceIndex];
-            update3DTitleText(current.title);
-            update3DHUDText("AIM AT WALL OR DESK & PULL TRIGGER", "#00f0ff");
-        }
-
-        function saveActiveAnchor() {
-            const activeKey = window.devices[window.currentDeviceIndex].key;
-            const anchorData = window.activeAnchors[activeKey];
-
-            if (!anchorData || !anchorData.position) {
-                update3DHUDText("PULL TRIGGER TO LOCK SPOT FIRST!", "#ff0055");
-                return;
-            }
-
-            update3DHUDText("COMMITTING ANCHOR TO RENDER DB...", "#00f0ff");
-
-            fetch('/api/spatial/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    deviceId: activeKey, 
-                    position: anchorData.position
-                })
-            })
-            .then(res => res.json())
-            .then(() => {
-                update3DHUDText(`SAVED ${activeKey.toUpperCase()} TO DB!`, "#39ff14");
-            })
-            .catch(() => {
-                update3DHUDText("ERROR COMMITTING ANCHOR TO DB", "#ff0055");
-            });
-        }
-
-        // Trigger Listener (Locking Object Positions)
-        AFRAME.registerComponent('trigger-lock-handler', {
+        // Controller Trigger Listener (Locks Location)
+        AFRAME.registerComponent('trigger-lock-listener', {
             init: function () {
-                this.el.addEventListener('click', (evt) => {
-                    // Check if clicking in-world buttons
-                    const clickedEl = evt.detail.intersectedEl;
-                    if (clickedEl && clickedEl.classList.contains('hud-btn')) return;
+                window.addEventListener('click', (evt) => {
+                    // Prevent DOM button clicks from triggering surface placement
+                    if (evt.target.tagName === 'BUTTON') return;
 
                     if (window.currentGazePoint) {
                         const activeKey = window.devices[window.currentDeviceIndex].key;
@@ -181,7 +152,8 @@
                             previewEl.setAttribute('position', `${pt.x} ${pt.y} ${pt.z}`);
                         }
 
-                        update3DHUDText(`LOCKED ${activeKey.toUpperCase()}: (${pt.x.toFixed(2)}, ${pt.y.toFixed(2)}, ${pt.z.toFixed(2)})`, "#39ff14");
+                        document.getElementById('hud-status').innerText = `LOCKED ${activeKey.toUpperCase()}: (${pt.x.toFixed(2)}, ${pt.y.toFixed(2)}, ${pt.z.toFixed(2)})`;
+                        document.getElementById('hud-status').style.color = '#39ff14';
                     }
                 });
             }
@@ -190,55 +162,25 @@
 
     <a-scene 
         force-passthrough
-        webxr-surface-snapper
+        surface-snap-tracker
+        trigger-lock-listener
         webxr="requiredFeatures: hit-test, local-floor; referenceSpaceType: local-floor;"
         renderer="colorManagement: true; antialias: true; alpha: true;" 
         xr-mode-ui="enabled: false">
 
-        <!-- Camera Rig & Head-Gaze Raycaster -->
+        <!-- Camera Rig -->
         <a-entity id="rig" position="0 0 0">
-            <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
-                <a-entity id="hud-pointer"
-                          trigger-lock-handler
-                          raycaster="objects: .hud-btn, .placement-surface; far: 10;"
-                          cursor="fuse: false;" position="0 0 -1"
-                          geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
-                          material="color: #00f0ff; shader: flat; opacity: 0.9; depthTest: false;">
-                </a-entity>
-
-                <!-- 1. IN-WORLD 3D FLOATING HUD HEADER (Attached below field of view) -->
-                <a-entity position="0 -0.45 -1.2" rotation="-15 0 0">
-                    <a-plane width="1.1" height="0.32" color="#0d1117" opacity="0.9" material="shader: flat; depthTest: false;"></a-plane>
-                    <a-text id="hud-3d-title" value="TARGET: SMART CLIMATE NODE" color="#ffffff" width="1.6" align="center" position="0 0.08 0.01" font="monoid"></a-text>
-                    <a-text id="hud-3d-status" value="AIM AT WALL OR DESK & PULL TRIGGER" color="#00f0ff" width="1.2" align="center" position="0 -0.04 0.01" font="monoid"></a-text>
-                </a-entity>
-
-                <!-- 2. IN-WORLD 3D ACTION BUTTONS (Gaze & Trigger Operable) -->
-                <a-entity position="0 -0.7 -1.2" rotation="-20 0 0">
-                    <!-- NEXT DEVICE BUTTON -->
-                    <a-entity class="hud-btn" onclick="toggleActiveDevice()" position="-0.32 0 0">
-                        <a-plane width="0.5" height="0.16" color="#161b22" material="shader: flat; depthTest: false;"></a-plane>
-                        <a-text value="[ NEXT NODE ]" color="#00f0ff" width="1.4" align="center" position="0 0 0.01" font="monoid"></a-text>
-                    </a-entity>
-
-                    <!-- SAVE TO DB BUTTON -->
-                    <a-entity class="hud-btn" onclick="saveActiveAnchor()" position="0.32 0 0">
-                        <a-plane width="0.5" height="0.16" color="#238636" material="shader: flat; depthTest: false;"></a-plane>
-                        <a-text value="[ SAVE TO DB ]" color="#ffffff" width="1.4" align="center" position="0 0 0.01" font="monoid"></a-text>
-                    </a-entity>
-                </a-entity>
-
-            </a-entity>
+            <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
         </a-entity>
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
         <!-- Surface Snapping Reticle Ring -->
-        <a-ring id="hud-reticle" radius-inner="0.04" radius-outer="0.06" rotation="-90 0 0"
+        <a-ring id="hud-reticle" radius-inner="0.03" radius-outer="0.05" rotation="-90 0 0"
                 material="color: #00f0ff; shader: flat; opacity: 0.9; depthTest: false;" visible="false">
         </a-ring>
 
-        <!-- Dynamic Wireframe Surface Guide Box -->
+        <!-- Dynamic Green Surface Guide Box -->
         <a-box id="placement-guide-box" width="0.25" height="0.25" depth="0.25" 
                material="color: #39ff14; wireframe: true; opacity: 0.95; shader: flat; depthTest: false;" visible="false">
         </a-box>
@@ -266,7 +208,16 @@
     <script>
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
 
-        // Load DB positions on startup
+        window.currentGazePoint = null;
+        window.activeAnchors = {};
+        window.devices = [
+            { key: 'smart_climate_node', title: 'TARGET: SMART CLIMATE NODE' },
+            { key: 'perimeter_monitor', title: 'TARGET: PERIMETER MONITOR' },
+            { key: 'smart_power_relay', title: 'TARGET: SMART POWER RELAY' }
+        ];
+        window.currentDeviceIndex = 0;
+
+        // Fetch saved positions from database
         fetch('/api/spatial/map')
             .then(res => res.json())
             .then(db => {
@@ -280,6 +231,45 @@
                     }
                 });
             });
+
+        function toggleActiveDevice() {
+            window.currentDeviceIndex = (window.currentDeviceIndex + 1) % window.devices.length;
+            const current = window.devices[window.currentDeviceIndex];
+            document.getElementById('hud-title').innerText = current.title;
+            document.getElementById('hud-status').innerText = 'GAZE AT SURFACE & PULL TRIGGER TO LOCK';
+            document.getElementById('hud-status').style.color = '#00f0ff';
+        }
+
+        function saveActiveAnchor() {
+            const activeKey = window.devices[window.currentDeviceIndex].key;
+            const anchorData = window.activeAnchors[activeKey];
+
+            if (!anchorData || !anchorData.position) {
+                document.getElementById('hud-status').innerText = 'PULL TRIGGER TO LOCK SPOT FIRST!';
+                document.getElementById('hud-status').style.color = '#ff0055';
+                return;
+            }
+
+            document.getElementById('hud-status').innerText = 'SAVING TO RENDER DB...';
+
+            fetch('/api/spatial/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    deviceId: activeKey, 
+                    position: anchorData.position
+                })
+            })
+            .then(res => res.json())
+            .then(() => {
+                document.getElementById('hud-status').innerText = `SAVED ${activeKey.toUpperCase()} TO DB!`;
+                document.getElementById('hud-status').style.color = '#39ff14';
+            })
+            .catch(() => {
+                document.getElementById('hud-status').innerText = 'ERROR SAVING TO DB';
+                document.getElementById('hud-status').style.color = '#ff0055';
+            });
+        }
 
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const sceneEl = document.querySelector('a-scene');
