@@ -3,15 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOEMATA // HYBRID AR VIEWER</title>
+    <title>NOEMATA // NATIVE WEBXR VIEWER</title>
     
-    <!-- A-Frame Core -->
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-    
-    <!-- MindAR Image Tracking -->
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-    
-    <!-- Real-Time WebSockets -->
     <script src="/socket.io/socket.io.js"></script>
 
     <style>
@@ -20,26 +14,18 @@
             overflow: hidden; background-color: transparent !important;
             background: transparent !important;
         }
-        #hud-status-banner {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 99999; padding: 12px 24px; background: rgba(13, 17, 23, 0.9);
-            border: 1px solid #00f0ff; border-radius: 8px; color: #00f0ff;
-            font-family: monospace; font-size: 14px; font-weight: bold;
-            letter-spacing: 1px; pointer-events: none; text-align: center;
-            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
-        }
-        /* Invisible Full-Screen Tap Gateway to unlock WebXR audio/video permissions */
-        #user-gesture-gateway {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 99998; background: rgba(0,0,0,0.01); cursor: pointer;
+        #custom-ar-btn {
+            position: absolute; bottom: 25px; right: 25px; z-index: 99999;
+            padding: 16px 28px; background: #00f0ff; color: #000;
+            border: none; border-radius: 8px; font-family: monospace;
+            font-weight: bold; font-size: 16px; cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
         }
     </style>
 </head>
 <body style="margin: 0; overflow: hidden; background-color: transparent !important;">
 
-    <!-- HUD OVERLAY -->
-    <div id="hud-status-banner">TAP SCREEN ONCE, THEN POINT CAMERA AT TARGET</div>
-    <div id="user-gesture-gateway"></div>
+    <button id="custom-ar-btn">ENTER QUEST PASSTHROUGH AR</button>
 
     <script>
         AFRAME.registerComponent('force-passthrough', {
@@ -58,26 +44,25 @@
     </script>
 
     <a-scene 
-        mindar-image="imageTargetSrc: /assets/targets.mind; autoStart: true; uiLoading: no; uiError: no;" 
         force-passthrough
-        webxr="requiredFeatures: hit-test, local-floor; referenceSpaceType: local-floor;"
-        color-space="sRGB" 
+        webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: image-tracking; referenceSpaceType: local-floor;"
         renderer="colorManagement: true; antialias: true; alpha: true;" 
-        vr-mode-ui="enabled: false">
+        xr-mode-ui="enabled: false">
 
-        <a-camera position="0 0 0" look-controls="enabled: false">
-            <a-entity id="hud-pointer"
-                      raycaster="objects: .gaze-target; far: 10;"
-                      cursor="fuse: false;" position="0 0 -1"
-                      geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
-                      material="color: #00f0ff; shader: flat; opacity: 0.8;">
+        <a-entity id="rig" position="0 0 0">
+            <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
+                <a-entity id="hud-pointer"
+                          raycaster="objects: .gaze-target; far: 10;"
+                          cursor="fuse: false;" position="0 0 -1"
+                          geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
+                          material="color: #00f0ff; shader: flat; opacity: 0.8;">
+                </a-entity>
             </a-entity>
-        </a-camera>
+        </a-entity>
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
-        <!-- MINDAR ANCHOR TARGET -->
-        <a-entity id="noemata-spatial-anchor" mindar-image-target="targetIndex: 0">
+        <a-entity id="noemata-spatial-anchor" position="0 1.2 -1">
 
             <!-- 1. SMART CLIMATE NODE -->
             <a-entity id="smart-climate-asset" position="0 0.25 0">
@@ -121,18 +106,6 @@
 
     <script>
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
-        const banner = document.getElementById('hud-status-banner');
-        const gateway = document.getElementById('user-gesture-gateway');
-        const sceneEl = document.querySelector('a-scene');
-
-        let userInteracted = false;
-
-        // Register initial screen touch to unlock Quest WebXR auto-entry
-        gateway.addEventListener('click', () => {
-            userInteracted = true;
-            gateway.style.display = 'none';
-            banner.innerText = "SCANNING FOR PRINTED TARGET...";
-        });
 
         function applyDynamicPositions(map) {
             if (!map) return;
@@ -157,28 +130,7 @@
 
         socket.on('spatialAnchorsUpdated', (anchors) => applyDynamicPositions(anchors));
 
-        // TARGET RECOGNIZATION LISTENERS
-        document.addEventListener("DOMContentLoaded", () => {
-            const targetEntity = document.querySelector('#noemata-spatial-anchor');
-
-            targetEntity.addEventListener("targetFound", () => {
-                console.log("[MINDAR RECOGNIZED TARGET]");
-                banner.innerText = "TARGET RECOGNIZED // ENTERING PASSTHROUGH AR...";
-                banner.style.color = "#39ff14";
-                banner.style.borderColor = "#39ff14";
-
-                // Automatically trigger native Quest WebXR session
-                setTimeout(() => {
-                    if (sceneEl.enterAR) {
-                        sceneEl.enterAR().catch(err => {
-                            console.warn("[WEBXR AUTO-ENTRY FAILED] User must tap screen first:", err);
-                        });
-                    }
-                }, 500);
-            });
-        });
-
-        // Gaze Hover Listeners
+        // Gaze Hover Telemetry Cards
         document.querySelectorAll('.gaze-target').forEach(targetEl => {
             const parentNode = targetEl.parentElement;
             const card = parentNode.querySelector('.info-card');
@@ -191,7 +143,7 @@
             });
         });
 
-        // Live WebSockets
+        // Live Sockets
         socket.on('climateStateUpdate', (data) => {
             const tempText = document.getElementById('popup-climate-temp');
             const statusText = document.getElementById('popup-climate-status');
@@ -231,6 +183,16 @@
                 if (rPower) rPower.setAttribute('value', `LOAD: ${state.smart_power_relay.powerDraw} kW`);
                 if (rBox) rBox.setAttribute('material', 'color', rColor);
             }
+        });
+
+        document.getElementById('custom-ar-btn').addEventListener('click', () => {
+            const sceneEl = document.querySelector('a-scene');
+            if (sceneEl.enterAR) {
+                sceneEl.enterAR();
+            } else if (sceneEl.enterVR) {
+                sceneEl.enterVR();
+            }
+            document.getElementById('custom-ar-btn').style.display = 'none';
         });
     </script>
 </body>
