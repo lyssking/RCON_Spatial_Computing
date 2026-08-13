@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOEMATA // SPATIAL OPERATOR VIEWER</title>
+    <title>NOEMATA // GAZE OPERATOR VIEWER</title>
     
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -28,6 +28,7 @@
     <button id="custom-ar-btn">ENTER QUEST PASSTHROUGH AR</button>
 
     <script>
+        // Force Canvas Alpha Transparency for WebXR Passthrough
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -42,75 +43,90 @@
             }
         });
 
-        AFRAME.registerComponent('reticle-follower', {
+        // Gaze Hover Manager for HUD Popups
+        AFRAME.registerComponent('gaze-hud-manager', {
             init: function () {
-                this.reticleRing = document.querySelector('#hud-reticle');
-                this.cameraEl = document.querySelector('#main-camera');
-                this.dir = new THREE.Vector3();
-            },
-            tick: function () {
-                if (!this.cameraEl || !this.reticleRing) return;
-                const cameraObj = this.cameraEl.object3D;
-                this.dir.set(0, 0, -1.0).applyQuaternion(cameraObj.quaternion);
-                const pos = cameraObj.position.clone().add(this.dir);
-                this.reticleRing.object3D.position.copy(pos);
-                this.reticleRing.object3D.quaternion.copy(cameraObj.quaternion);
+                this.el.addEventListener('raycaster-intersected', (evt) => {
+                    const parentNode = this.el.parentElement;
+                    const card = parentNode.querySelector('.info-card');
+                    if (card) {
+                        card.setAttribute('visible', 'true');
+                    }
+                });
+
+                this.el.addEventListener('raycaster-intersected-cleared', (evt) => {
+                    const parentNode = this.el.parentElement;
+                    const card = parentNode.querySelector('.info-card');
+                    if (card) {
+                        card.setAttribute('visible', 'false');
+                    }
+                });
             }
         });
     </script>
 
     <a-scene 
         force-passthrough
-        reticle-follower
         webxr="requiredFeatures: hit-test, local-floor; referenceSpaceType: local-floor;"
         renderer="colorManagement: true; antialias: true; alpha: true;" 
         xr-mode-ui="enabled: false">
 
+        <!-- Camera Rig & Gaze Raycaster Pointer -->
         <a-entity id="rig" position="0 0 0">
-            <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
+            <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
+                <a-entity id="hud-pointer"
+                          raycaster="objects: .gaze-target; far: 10;"
+                          cursor="fuse: false;" position="0 0 -1"
+                          geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
+                          material="color: #00f0ff; shader: flat; opacity: 0.8; depthTest: false;">
+                </a-entity>
+            </a-entity>
         </a-entity>
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
-        <a-ring id="hud-reticle" radius-inner="0.005" radius-outer="0.01" 
-                material="color: #00f0ff; shader: flat; opacity: 0.8; depthTest: false;">
-        </a-ring>
-
+        <!-- MAIN SPATIAL ANCHOR CONTAINER -->
         <a-entity id="noemata-spatial-anchor">
 
             <!-- 1. SMART CLIMATE NODE -->
             <a-entity id="smart-climate-asset" position="0 1.4 -1.2">
-                <a-box class="gaze-target" width="0.18" height="0.18" depth="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-box>
+                <a-box class="gaze-target" gaze-hud-manager width="0.18" height="0.18" depth="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-box>
                 <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
 
-                <a-entity class="info-card" position="0 0.32 0" visible="true">
-                    <a-plane width="0.65" height="0.28" color="#121620" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
-                    <a-text id="popup-climate-status" value="CLIMATE: OPTIMAL" color="#00f0ff" width="1.1" position="-0.28 0.07 0.01" font="monoid"></a-text>
-                    <a-text id="popup-climate-temp" value="TEMP: -- °F | HUM: --%" color="#ffffff" width="0.9" position="-0.28 -0.04 0.01" font="monoid"></a-text>
+                <!-- GAZE-ACTIVATED HUD CARD (OFF BY DEFAULT) -->
+                <a-entity class="info-card" position="0 0.38 0" visible="false">
+                    <a-plane width="0.7" height="0.3" color="#0d1117" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-plane width="0.72" height="0.32" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-text id="popup-climate-status" value="CLIMATE: OPTIMAL" color="#00f0ff" width="1.1" position="-0.3 0.07 0.01" font="monoid"></a-text>
+                    <a-text id="popup-climate-temp" value="TEMP: -- °F | HUM: --%" color="#ffffff" width="0.9" position="-0.3 -0.04 0.01" font="monoid"></a-text>
                 </a-entity>
             </a-entity>
 
             <!-- 2. PERIMETER MONITOR -->
             <a-entity id="perimeter-monitor-asset" position="-0.6 1.4 -1.5">
-                <a-cylinder class="gaze-target" radius="0.12" height="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-cylinder>
+                <a-cylinder class="gaze-target" gaze-hud-manager radius="0.12" height="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-cylinder>
                 <a-text value="[ PERIMETER GUARD ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
 
-                <a-entity class="info-card" position="0 0.32 0" visible="true">
-                    <a-plane width="0.6" height="0.28" color="#121620" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
-                    <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#00f0ff" width="1.0" position="-0.25 0.06 0.01" font="monoid"></a-text>
-                    <a-text id="popup-perimeter-breach" value="BREACHES: 0" color="#ff0055" width="0.8" position="-0.25 -0.04 0.01" font="monoid"></a-text>
+                <!-- GAZE-ACTIVATED HUD CARD (OFF BY DEFAULT) -->
+                <a-entity class="info-card" position="0 0.38 0" visible="false">
+                    <a-plane width="0.65" height="0.3" color="#0d1117" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-plane width="0.67" height="0.32" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#00f0ff" width="1.0" position="-0.27 0.06 0.01" font="monoid"></a-text>
+                    <a-text id="popup-perimeter-breach" value="BREACHES: 0" color="#ff0055" width="0.8" position="-0.27 -0.04 0.01" font="monoid"></a-text>
                 </a-entity>
             </a-entity>
 
             <!-- 3. SMART POWER RELAY -->
             <a-entity id="smart-relay-asset" position="0.6 1.4 -1.5">
-                <a-box class="gaze-target" width="0.15" height="0.15" depth="0.15" material="color: #64748b; shader: flat; wireframe: true; depthTest: false;"></a-box>
+                <a-box class="gaze-target" gaze-hud-manager width="0.15" height="0.15" depth="0.15" material="color: #64748b; shader: flat; wireframe: true; depthTest: false;"></a-box>
                 <a-text value="[ POWER RELAY ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
 
-                <a-entity class="info-card" position="0 0.32 0" visible="true">
-                    <a-plane width="0.6" height="0.28" color="#121620" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
-                    <a-text id="popup-relay-status" value="RELAY: OFF" color="#ffffff" width="1.0" position="-0.25 0.06 0.01" font="monoid"></a-text>
-                    <a-text id="popup-relay-power" value="LOAD: 0.0 kW" color="#64748b" width="0.8" position="-0.25 -0.04 0.01" font="monoid"></a-text>
+                <!-- GAZE-ACTIVATED HUD CARD (OFF BY DEFAULT) -->
+                <a-entity class="info-card" position="0 0.38 0" visible="false">
+                    <a-plane width="0.65" height="0.3" color="#0d1117" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-plane width="0.67" height="0.32" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-text id="popup-relay-status" value="RELAY: OFF" color="#ffffff" width="1.0" position="-0.27 0.06 0.01" font="monoid"></a-text>
+                    <a-text id="popup-relay-power" value="LOAD: 0.0 kW" color="#64748b" width="0.8" position="-0.27 -0.04 0.01" font="monoid"></a-text>
                 </a-entity>
             </a-entity>
 
@@ -121,6 +137,7 @@
     <script>
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
 
+        // Apply saved positions from backend database
         function applyDynamicPositions(map) {
             if (!map) return;
             const targets = [
@@ -138,13 +155,15 @@
             });
         }
 
+        // Fetch DB positions on load
         fetch('/api/spatial/map')
             .then(res => res.json())
             .then(db => applyDynamicPositions(db.anchors || db));
 
+        // Listen for live database updates
         socket.on('spatialAnchorsUpdated', (anchors) => applyDynamicPositions(anchors));
 
-        // Live Socket Telemetry Updates
+        // 1. Live Climate Telemetry Listener
         socket.on('climateStateUpdate', (data) => {
             const tempText = document.getElementById('popup-climate-temp');
             const statusText = document.getElementById('popup-climate-status');
@@ -153,6 +172,7 @@
             if (tempText && statusText) {
                 tempText.setAttribute('value', `TEMP: ${data.temperature} °F | HUM: ${data.humidity}%`);
                 statusText.setAttribute('value', `CLIMATE: ${data.status}`);
+
                 const isWarning = data.status === "OVERHEATING_WARNING";
                 const activeColor = isWarning ? "#ff0055" : "#00f0ff";
                 statusText.setAttribute('color', activeColor);
@@ -160,15 +180,20 @@
             }
         });
 
+        // 2. Live Twin State Listener (Perimeter & Relay)
         socket.on('twinStateUpdate', (state) => {
             if (state.perimeter_monitor) {
                 const pStatus = document.getElementById('popup-perimeter-status');
                 const pBreach = document.getElementById('popup-perimeter-breach');
                 const pCylinder = document.querySelector('#perimeter-monitor-asset a-cylinder');
+
                 const isBreached = state.perimeter_monitor.perimeter === "BREACH_ALERT";
                 const pColor = isBreached ? "#ff0055" : "#00f0ff";
 
-                if (pStatus) { pStatus.setAttribute('value', `SHIELD: ${state.perimeter_monitor.perimeter}`); pStatus.setAttribute('color', pColor); }
+                if (pStatus) {
+                    pStatus.setAttribute('value', `SHIELD: ${state.perimeter_monitor.perimeter}`);
+                    pStatus.setAttribute('color', pColor);
+                }
                 if (pBreach) pBreach.setAttribute('value', `BREACHES: ${state.perimeter_monitor.breachCount}`);
                 if (pCylinder) pCylinder.setAttribute('material', 'color', pColor);
             }
@@ -177,20 +202,38 @@
                 const rStatus = document.getElementById('popup-relay-status');
                 const rPower = document.getElementById('popup-relay-power');
                 const rBox = document.querySelector('#smart-relay-asset a-box');
+
                 const isRelayOn = state.smart_power_relay.status === "ON";
                 const rColor = isRelayOn ? "#00f0ff" : "#64748b";
 
-                if (rStatus) { rStatus.setAttribute('value', `RELAY: ${state.smart_power_relay.status}`); rStatus.setAttribute('color', isRelayOn ? "#00f0ff" : "#ffffff"); }
+                if (rStatus) {
+                    rStatus.setAttribute('value', `RELAY: ${state.smart_power_relay.status}`);
+                    rStatus.setAttribute('color', isRelayOn ? "#00f0ff" : "#ffffff");
+                }
                 if (rPower) rPower.setAttribute('value', `LOAD: ${state.smart_power_relay.powerDraw} kW`);
                 if (rBox) rBox.setAttribute('material', 'color', rColor);
             }
         });
 
+        // Native WebXR Passthrough Launcher
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const sceneEl = document.querySelector('a-scene');
-            if (sceneEl.enterAR) sceneEl.enterAR();
-            else if (sceneEl.enterVR) sceneEl.enterVR();
-            document.getElementById('custom-ar-btn').style.display = 'none';
+            const button = document.getElementById('custom-ar-btn');
+
+            const launch = () => {
+                if (sceneEl.enterAR) {
+                    sceneEl.enterAR();
+                } else {
+                    sceneEl.enterVR();
+                }
+                button.style.display = 'none';
+            };
+
+            if (sceneEl.hasLoaded) {
+                launch();
+            } else {
+                sceneEl.addEventListener('loaded', launch);
+            }
         });
     </script>
 </body>
