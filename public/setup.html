@@ -118,7 +118,11 @@
                         this.previewEl.object3D.quaternion.set(q.x, q.y, q.z, q.w);
                         this.previewEl.setAttribute('visible', 'true');
 
-                        window.latestHitPos = { x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2) };
+                        window.latestHitPos = { 
+                            x: parseFloat(p.x.toFixed(2)), 
+                            y: parseFloat(p.y.toFixed(2)), 
+                            z: parseFloat(p.z.toFixed(2)) 
+                        };
                     }
                 }
             }
@@ -189,13 +193,15 @@
         <!-- GREEN TARGET RETICLE -->
         <a-entity id="placement-preview" visible="false">
             <a-ring radius-inner="0.08" radius-outer="0.1" color="#39ff14" rotation="-90 0 0" material="shader: flat; depthTest: true;"></a-ring>
-            <a-box size="0.12" material="color: #39ff14; wireframe: true; depthTest: true;" position="0 0.06 0"></a-box>
+            <a-box width="0.12" height="0.12" depth="0.12" material="color: #39ff14; wireframe: true; depthTest: true;" position="0 0.06 0"></a-box>
         </a-entity>
 
     </a-scene>
 
     <script>
-        const socket = io();
+        // Force secure WebSocket configuration for live Render deployment
+        const socket = io({ transports: ['websocket', 'polling'], secure: true });
+
         window.isPosLocked = false;
         window.latestHitPos = null;
         window.lockedCoords = null;
