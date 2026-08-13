@@ -77,47 +77,45 @@
             }
         });
 
-        // Bounding Box Tracking System
+        // Independent Gaze Tracker - Positions Guide Box directly in front of view direction
         AFRAME.registerComponent('spatial-box-tracker', {
             init: function () {
                 this.placementBox = document.querySelector('#placement-guide-box');
-                this.pointer = document.querySelector('#hud-pointer');
-                this.camera = document.querySelector('#main-camera');
+                this.reticleRing = document.querySelector('#hud-reticle');
+                this.cameraEl = document.querySelector('#main-camera');
+                this.vector = new THREE.Vector3();
+                this.dir = new THREE.Vector3();
             },
             tick: function () {
-                if (!this.pointer || !this.placementBox || !this.camera) return;
+                if (!this.cameraEl || !this.placementBox) return;
 
-                const raycaster = this.pointer.components.raycaster;
-                if (!raycaster) return;
+                const cameraObj = this.cameraEl.object3D;
 
-                // Raycast against the floating pitch plane
-                const intersections = raycaster.getIntersections();
-                if (intersections.length > 0) {
-                    const hitPoint = intersections[0].point;
+                // Get forward gaze vector from current head rotation
+                this.dir.set(0, 0, -1.8).applyQuaternion(cameraObj.quaternion);
+                this.vector.copy(cameraObj.position).add(this.dir);
 
-                    // Update guide box position to match hit point
-                    this.placementBox.object3D.position.copy(hitPoint);
-                    this.placementBox.setAttribute('visible', 'true');
+                // Update Guide Box Position
+                this.placementBox.object3D.position.copy(this.vector);
+                this.placementBox.setAttribute('visible', 'true');
 
-                    window.currentGazePoint = hitPoint.clone();
-                } else {
-                    // Fallback: Project box 1.5 meters directly ahead of camera
-                    const camObj = this.camera.object3D;
-                    const dir = new THREE.Vector3(0, 0, -1.5).applyQuaternion(camObj.quaternion);
-                    const fallbackPos = camObj.position.clone().add(dir);
-
-                    this.placementBox.object3D.position.copy(fallbackPos);
-                    this.placementBox.setAttribute('visible', 'true');
-
-                    window.currentGazePoint = fallbackPos.clone();
+                // Update Reticle Ring Position (1 meter ahead)
+                if (this.reticleRing) {
+                    const reticleDir = new THREE.Vector3(0, 0, -1.0).applyQuaternion(cameraObj.quaternion);
+                    const reticlePos = cameraObj.position.clone().add(reticleDir);
+                    this.reticleRing.object3D.position.copy(reticlePos);
+                    this.reticleRing.object3D.quaternion.copy(cameraObj.quaternion);
+                    this.reticleRing.setAttribute('visible', 'true');
                 }
+
+                window.currentGazePoint = this.vector.clone();
             }
         });
 
-        // Trigger Click Listener to Commit Spatial Pose
+        // Trigger Click Listener (Handles Controller Trigger / Screen Tap)
         AFRAME.registerComponent('trigger-lock-listener', {
             init: function () {
-                this.el.addEventListener('click', () => {
+                window.addEventListener('click', () => {
                     if (window.currentGazePoint) {
                         const activeKey = window.devices[window.currentDeviceIndex].key;
                         const pt = window.currentGazePoint;
@@ -146,48 +144,42 @@
     <a-scene 
         force-passthrough
         spatial-box-tracker
+        trigger-lock-listener
         webxr="requiredFeatures: hit-test, local-floor; referenceSpaceType: local-floor;"
         renderer="colorManagement: true; antialias: true; alpha: true;" 
         xr-mode-ui="enabled: false">
 
-        <!-- Camera Rig & Cursor Pointer -->
+        <!-- Camera Rig -->
         <a-entity id="rig" position="0 0 0">
-            <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
-                
-                <!-- Raycaster Target Plane (Always 2 meters ahead of camera view) -->
-                <a-plane class="placement-surface" position="0 0 -2" width="10" height="10" visible="false"></a-plane>
-
-                <a-entity id="hud-pointer"
-                          trigger-lock-listener
-                          raycaster="objects: .placement-surface; far: 10;"
-                          cursor="fuse: false;" position="0 0 -1"
-                          geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
-                          material="color: #00f0ff; shader: flat; opacity: 0.9;">
-                </a-entity>
-            </a-entity>
+            <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
         </a-entity>
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
-        <!-- Dynamic Wireframe Guide Box (Follows gaze in AR) -->
+        <!-- Center Gaze Reticle Ring -->
+        <a-ring id="hud-reticle" radius-inner="0.01" radius-outer="0.02" 
+                material="color: #00f0ff; shader: flat; opacity: 0.9; depthTest: false;" visible="false">
+        </a-ring>
+
+        <!-- Dynamic Wireframe Guide Box (Follows Gaze) -->
         <a-box id="placement-guide-box" width="0.25" height="0.25" depth="0.25" 
-               material="color: #39ff14; wireframe: true; opacity: 0.9; shader: flat;" visible="false">
+               material="color: #39ff14; wireframe: true; opacity: 0.95; shader: flat; depthTest: false;" visible="false">
         </a-box>
 
         <!-- HARDWARE PREVIEW NODES -->
         <a-entity id="noemata-spatial-anchor">
             <a-entity id="smart_climate_node-preview" position="0 1.4 -1.2">
-                <a-box width="0.18" height="0.18" depth="0.18" material="color: #00f0ff; shader: flat; wireframe: true;"></a-box>
+                <a-box width="0.18" height="0.18" depth="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-box>
                 <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
             </a-entity>
 
             <a-entity id="perimeter_monitor-preview" position="-0.6 1.4 -1.5">
-                <a-cylinder radius="0.12" height="0.18" material="color: #00f0ff; shader: flat; wireframe: true;"></a-cylinder>
+                <a-cylinder radius="0.12" height="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-cylinder>
                 <a-text value="[ PERIMETER GUARD ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
             </a-entity>
 
             <a-entity id="smart_power_relay-preview" position="0.6 1.4 -1.5">
-                <a-box width="0.15" height="0.15" depth="0.15" material="color: #64748b; shader: flat; wireframe: true;"></a-box>
+                <a-box width="0.15" height="0.15" depth="0.15" material="color: #64748b; shader: flat; wireframe: true; depthTest: false;"></a-box>
                 <a-text value="[ POWER RELAY ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
             </a-entity>
         </a-entity>
