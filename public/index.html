@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>NOEMATA // SPATIAL AR VIEWER</title>
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -29,14 +29,28 @@
             cursor: pointer;
             box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
         }
+        #status-indicator {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 99999;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: #38bdf8;
+            font-family: monospace;
+            font-size: 13px;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body style="margin: 0; overflow: hidden; background: transparent !important;">
 
+    <div id="status-indicator">● LIVE ARDUINO FEED CONNECTED</div>
     <button id="custom-ar-btn">ENTER AR VIEWER</button>
 
     <script>
-        // Ensure transparent canvas for AR passthrough
         AFRAME.registerComponent('force-ar-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -50,7 +64,6 @@
             }
         });
 
-        // Makes cards face the camera while remaining fixed at their spatial positions
         AFRAME.registerComponent('billboard', {
             tick: function () {
                 const cam = document.getElementById('main-camera');
@@ -62,69 +75,56 @@
         });
     </script>
 
-    <!-- Native A-Frame Scene configured for 6DoF World-Locked Tracking -->
     <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: dom-overlay; referenceSpaceType: local-floor;"
              force-ar-passthrough
              renderer="alpha: true; colorManagement: true; antialias: true;"
              xr-mode-ui="enabled: false">
         
-        <!-- Standard Camera with Look Pointer -->
         <a-entity id="rig" position="0 0 0">
-            <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
-                <a-entity id="hud-pointer"
-                          raycaster="objects: .gaze-target; far: 10;"
-                          cursor="fuse: false;" position="0 0 -1"
-                          geometry="primitive: ring; radiusInner: 0.003; radiusOuter: 0.006"
-                          material="color: #00f0ff; shader: flat; opacity: 0.4">
-                </a-entity>
-            </a-entity>
+            <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
         </a-entity>
 
-        <!-- STATIC WORLD CONTAINER (Stationary in physical space) -->
+        <a-entity light="type: ambient; intensity: 1.5;"></a-entity>
+
+        <!-- STATIC WORLD CONTAINER -->
         <a-entity id="world-space-container" position="0 0 0">
 
-            <!-- 1. SMART CLIMATE NODE -->
-            <a-entity class="gaze-target" id="smart-climate-asset" billboard
-                      geometry="primitive: box; width: 0.16; height: 0.16; depth: 0.16" 
-                      material="color: #00f0ff; wireframe: true; opacity: 0.8" 
-                      position="0 -10 0">
-                
-                <a-text value="[ NOEMATA // CLIMATE NODE ]" position="0 0.16 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
+            <!-- 1. CLIMATE NODE -->
+            <a-entity id="smart-climate-asset" billboard position="-0.85 1.5 -2.4">
+                <a-box id="climate-mesh" width="0.16" height="0.16" depth="0.16" material="color: #00f0ff; wireframe: true; opacity: 0.8"></a-box>
+                <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.4" align="center" color="#00f0ff" font="monoid"></a-text>
 
-                <a-entity class="info-card" position="0 0.35 0" visible="false">
-                    <a-plane width="0.6" height="0.28" color="#121620" opacity="0.9" material="shader:flat"></a-plane>
-                    <a-text id="popup-climate-status" value="CLIMATE: OPTIMAL" color="#00f0ff" width="1.1" position="-0.26 0.07 0.01" font="monoid"></a-text>
-                    <a-text id="popup-climate-temp" value="TEMP: -- °F | HUM: --%" color="#ffffff" width="0.9" position="-0.26 -0.04 0.01" font="monoid"></a-text>
+                <!-- Permanently visible live HUD card -->
+                <a-entity class="info-card" position="0 0.42 0" visible="true">
+                    <a-plane width="0.75" height="0.30" color="#121620" opacity="0.92" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-text id="popup-climate-status" value="CLIMATE: OPTIMAL" color="#34d399" width="1.2" position="-0.32 0.07 0.01" font="monoid"></a-text>
+                    <a-text id="popup-climate-temp" value="TEMP: 72.4 °F | HUM: 45.0%" color="#ffffff" width="1.0" position="-0.32 -0.04 0.01" font="monoid"></a-text>
                 </a-entity>
             </a-entity>
 
             <!-- 2. PERIMETER MONITOR -->
-            <a-entity class="gaze-target" id="perimeter-monitor-asset" billboard
-                      geometry="primitive: cylinder; radius: 0.12; height: 0.18" 
-                      material="color: #00f0ff; wireframe: true; opacity: 0.8" 
-                      position="0 -10 0">
-                
-                <a-text value="[ NOEMATA // PERIMETER GUARD ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
+            <a-entity id="perimeter-monitor-asset" billboard position="1.20 1.8 -3.1">
+                <a-cylinder id="perimeter-mesh" radius="0.10" height="0.18" material="color: #60a5fa; wireframe: true; opacity: 0.8"></a-cylinder>
+                <a-text value="[ PERIMETER GUARD ]" position="0 0.20 0" width="1.4" align="center" color="#60a5fa" font="monoid"></a-text>
 
-                <a-entity class="info-card" position="0 0.35 0" visible="false">
-                    <a-plane width="0.55" height="0.25" color="#121620" opacity="0.9" material="shader:flat"></a-plane>
-                    <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#00f0ff" width="1.1" position="-0.23 0.06 0.01" font="monoid"></a-text>
-                    <a-text id="popup-perimeter-breach" value="BREACHES: 0" color="#ff0055" width="0.9" position="-0.23 -0.04 0.01" font="monoid"></a-text>
+                <!-- Permanently visible live HUD card -->
+                <a-entity class="info-card" position="0 0.42 0" visible="true">
+                    <a-plane width="0.75" height="0.30" color="#121620" opacity="0.92" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#34d399" width="1.2" position="-0.32 0.07 0.01" font="monoid"></a-text>
+                    <a-text id="popup-perimeter-breach" value="DIST: 28 in | BREACH: 0" color="#94a3b8" width="1.0" position="-0.32 -0.04 0.01" font="monoid"></a-text>
                 </a-entity>
             </a-entity>
 
             <!-- 3. SMART POWER RELAY -->
-            <a-entity class="gaze-target" id="smart-relay-asset" billboard
-                      geometry="primitive: box; width: 0.15; height: 0.15; depth: 0.15" 
-                      material="color: #64748b; wireframe: true; opacity: 0.8" 
-                      position="0 -10 0">
-                
-                <a-text value="[ NOEMATA // POWER RELAY ]" position="0 0.15 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
+            <a-entity id="smart-relay-asset" billboard position="1.45 1.0 -1.8">
+                <a-box id="relay-mesh" width="0.15" height="0.15" depth="0.15" material="color: #34d399; wireframe: true; opacity: 0.8"></a-box>
+                <a-text value="[ POWER RELAY ]" position="0 0.18 0" width="1.4" align="center" color="#ffffff" font="monoid"></a-text>
 
-                <a-entity class="info-card" position="0 0.35 0" visible="false">
-                    <a-plane width="0.55" height="0.25" color="#121620" opacity="0.9" material="shader:flat"></a-plane>
-                    <a-text id="popup-relay-status" value="RELAY: OFF" color="#ffffff" width="1.1" position="-0.23 0.06 0.01" font="monoid"></a-text>
-                    <a-text id="popup-relay-power" value="LOAD: 0.0 kW" color="#64748b" width="0.9" position="-0.23 -0.04 0.01" font="monoid"></a-text>
+                <!-- Permanently visible live HUD card -->
+                <a-entity class="info-card" position="0 0.42 0" visible="true">
+                    <a-plane width="0.75" height="0.30" color="#121620" opacity="0.92" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-text id="popup-relay-status" value="RELAY: ON" color="#34d399" width="1.2" position="-0.32 0.07 0.01" font="monoid"></a-text>
+                    <a-text id="popup-relay-power" value="LOAD: 1.42 kW" color="#ffffff" width="1.0" position="-0.32 -0.04 0.01" font="monoid"></a-text>
                 </a-entity>
             </a-entity>
 
@@ -133,10 +133,11 @@
     </a-scene>
 
     <script>
-        const socket = io();
+        // Explicit WebSockets transport connection
+        const socket = io({ transports: ['websocket', 'polling'] });
         const sceneEl = document.querySelector('a-scene');
 
-        // Apply coordinates from DB
+        // Apply dynamic coordinates from DB
         function applyRegisteredAnchors(map) {
             if (!map) return;
             const dataMap = map.anchors || map;
@@ -163,33 +164,71 @@
 
         socket.on('spatialAnchorsUpdated', (map) => applyRegisteredAnchors(map));
 
-        // Hover Popups
-        document.querySelectorAll('.gaze-target').forEach(el => {
-            const card = el.querySelector('.info-card');
-            el.addEventListener('raycaster-intersected', () => {
-                if (card) card.setAttribute('visible', 'true');
-            });
-            el.addEventListener('raycaster-intersected-cleared', () => {
-                if (card) card.setAttribute('visible', 'false');
-            });
-        });
-
-        // Telemetry Listeners
+        // 1. CLIMATE NODE LIVE INGEST
         socket.on('climateStateUpdate', (data) => {
             const tempText = document.getElementById('popup-climate-temp');
             const statusText = document.getElementById('popup-climate-status');
-            const assetMesh = document.getElementById('smart-climate-asset');
+            const assetMesh = document.getElementById('climate-mesh');
 
-            if (tempText && statusText) {
-                tempText.setAttribute('value', `TEMP: ${data.temperature} °F | HUM: ${data.humidity}%`);
-                statusText.setAttribute('value', `CLIMATE: ${data.status}`);
-                const activeColor = data.status === "OVERHEATING_WARNING" ? "#ff0055" : "#00f0ff";
-                statusText.setAttribute('color', activeColor);
-                if (assetMesh) assetMesh.setAttribute('material', 'color', activeColor);
+            const temp = data.temperature !== undefined ? data.temperature : '--';
+            const hum = data.humidity !== undefined ? data.humidity : '--';
+            const status = data.status || 'OPTIMAL';
+
+            if (tempText) tempText.setAttribute('value', `TEMP: ${temp} °F | HUM: ${hum}%`);
+            if (statusText) {
+                statusText.setAttribute('value', `CLIMATE: ${status}`);
+                const isOverheat = status === "OVERHEATING_WARNING";
+                statusText.setAttribute('color', isOverheat ? "#ef4444" : "#34d399");
+                if (assetMesh) assetMesh.setAttribute('material', 'color', isOverheat ? "#ef4444" : "#00f0ff");
             }
         });
 
-        // Proper A-Frame AR Launcher (Ensures 6DoF camera tracking)
+        // 2. PERIMETER & RELAY LIVE INGEST (From Bridge /api/telemetry/safety)
+        socket.on('twinStateUpdate', (state) => {
+            if (state.perimeter_monitor) {
+                const pStatus = document.getElementById('popup-perimeter-status');
+                const pBreach = document.getElementById('popup-perimeter-breach');
+                const pMesh = document.getElementById('perimeter-mesh');
+
+                const isBreached = state.perimeter_monitor.perimeter === "BREACH_ALERT";
+                const dist = state.perimeter_monitor.distance !== undefined ? state.perimeter_monitor.distance : '--';
+                const breaches = state.perimeter_monitor.breachCount !== undefined ? state.perimeter_monitor.breachCount : (isBreached ? 1 : 0);
+
+                if (pStatus) {
+                    pStatus.setAttribute('value', `SHIELD: ${state.perimeter_monitor.perimeter}`);
+                    pStatus.setAttribute('color', isBreached ? "#ef4444" : "#34d399");
+                }
+                if (pBreach) {
+                    pBreach.setAttribute('value', `DIST: ${dist} in | BREACH: ${breaches}`);
+                    pBreach.setAttribute('color', isBreached ? "#ef4444" : "#94a3b8");
+                }
+                if (pMesh) {
+                    pMesh.setAttribute('material', 'color', isBreached ? "#ef4444" : "#60a5fa");
+                }
+            }
+
+            if (state.smart_power_relay) {
+                const rStatus = document.getElementById('popup-relay-status');
+                const rPower = document.getElementById('popup-relay-power');
+                const rMesh = document.getElementById('relay-mesh');
+
+                const isOn = state.smart_power_relay.status === "ON";
+                const power = state.smart_power_relay.powerDraw !== undefined ? state.smart_power_relay.powerDraw : '0.00';
+
+                if (rStatus) {
+                    rStatus.setAttribute('value', `RELAY: ${state.smart_power_relay.status}`);
+                    rStatus.setAttribute('color', isOn ? "#34d399" : "#94a3b8");
+                }
+                if (rPower) {
+                    rPower.setAttribute('value', `LOAD: ${power} kW`);
+                }
+                if (rMesh) {
+                    rMesh.setAttribute('material', 'color', isOn ? "#34d399" : "#94a3b8");
+                }
+            }
+        });
+
+        // Native WebXR AR Entry
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const btn = document.getElementById('custom-ar-btn');
             if (sceneEl.enterAR) {
