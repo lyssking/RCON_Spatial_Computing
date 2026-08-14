@@ -1,21 +1,21 @@
 {
-  "spaceId": "noemata-main",
-  "originDatum": "doorframe_main",
+  "spaceId": "noemata-facility-alpha",
+  "originDatum": "doorframe_datum",
   "anchors": {
     "smart_climate_node": {
-      "x": "-0.868",
-      "y": "-0.289",
-      "z": "-0.301"
+      "x": "-0.85",
+      "y": "2.10",
+      "z": "-2.40"
     },
     "perimeter_monitor": {
-      "x": "1.051",
-      "y": "-2.719",
-      "z": "-1.409"
+      "x": "1.20",
+      "y": "2.40",
+      "z": "-3.10"
     },
     "smart_power_relay": {
-      "x": "1.716",
-      "y": "-0.858",
-      "z": "-0.481"
+      "x": "1.45",
+      "y": "1.20",
+      "z": "-1.80"
     }
   }
 }
