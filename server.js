@@ -7,7 +7,7 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-// Initialize Socket.io with CORS enabled for WebAR clients & Arduinos
+// Initialize Socket.io with CORS enabled for WebAR clients & Quest browsers
 const io = new Server(server, {
     cors: {
         origin: "*",
@@ -37,10 +37,11 @@ function readDB() {
     if (!fs.existsSync(DB_PATH)) {
         const defaultDB = {
             spaceId: "noemata-main",
+            originDatum: "doorframe_main",
             anchors: {
-                smart_climate_node: { x: "0.000", y: "1.400", z: "-1.200" },
-                perimeter_monitor: { x: "-0.600", y: "1.400", z: "-1.500" },
-                smart_power_relay: { x: "0.600", y: "1.400", z: "-1.500" }
+                smart_climate_node: { x: "-0.868", y: "-0.289", z: "-0.301" },
+                perimeter_monitor: { x: "1.051", y: "-2.719", z: "-1.409" },
+                smart_power_relay: { x: "1.716", y: "-0.858", z: "-0.481" }
             }
         };
         fs.writeFileSync(DB_PATH, JSON.stringify(defaultDB, null, 2));
@@ -50,7 +51,7 @@ function readDB() {
         const raw = fs.readFileSync(DB_PATH, 'utf8');
         return JSON.parse(raw);
     } catch (e) {
-        return { spaceId: "noemata-main", anchors: {} };
+        return { spaceId: "noemata-main", originDatum: "doorframe_main", anchors: {} };
     }
 }
 
@@ -65,6 +66,7 @@ app.get('/api/spatial/map', (req, res) => {
     res.json(readDB());
 });
 
+// Quest Setup Endpoint: Stores exact 6DoF offsets relative to doorway origin
 app.post('/api/spatial/register', (req, res) => {
     const { deviceId, position, anchorUUID } = req.body;
     const db = readDB();
@@ -78,21 +80,17 @@ app.post('/api/spatial/register', (req, res) => {
     };
 
     writeDB(db);
-    console.log(`[ANCHOR REGISTERED] Device: ${deviceId} | Position:`, position);
+    console.log(`[ANCHOR SAVED VIA QUEST] ${deviceId} ->`, position);
 
+    // Broadcast updated positions to all connected mobile phone viewers
     io.emit('spatialAnchorsUpdated', db.anchors);
     res.json({ status: 'success', deviceId, position, anchorUUID });
 });
 
 // ==============================================================
-// HARDWARE TELEMETRY & TWO-WAY CONTROL ROUTES
+// HARDWARE TELEMETRY & CONTROL ROUTES
 // ==============================================================
 
-// 1. Climate Node Telemetry
-app.post('/api/telemetry/climate', (req, res) => {
-    const { deviceId, temperature, humidity, status } = req.body;
-
-    const tempVal = temperature !== undefined ? temperature : "--";
     const humVal = humidity !== undefined ? humidity : "--";
     const statusVal = status || (parseFloat(tempVal) > 85 ? "OVERHEATING_WARNING" : "OPTIMAL");
 
@@ -124,7 +122,7 @@ app.post('/api/telemetry/safety', (req, res) => {
     res.json({ status: "success", message: "Safety telemetry processed" });
 });
 
-// 3. Smart Power Relay Status Endpoint (Receives Telemetry)
+// 3. Smart Power Relay Telemetry
 app.post('/api/telemetry/relay', (req, res) => {
     const { state, powerDraw } = req.body;
 
@@ -141,18 +139,16 @@ app.post('/api/telemetry/relay', (req, res) => {
     res.json({ status: "success", currentHardwareState });
 });
 
-// 4. TWO-WAY CONTROL: WebAR Client Command to Toggle Physical Relay
+// 4. Bi-Directional Relay Toggle (From Mobile UI / Quest)
 app.post('/api/hardware/relay/toggle', (req, res) => {
-    // Toggle state in memory
     const newStatus = currentHardwareState.relayStatus === "ON" ? "OFF" : "ON";
     const newPower = newStatus === "ON" ? "0.42" : "0.0";
 
     currentHardwareState.relayStatus = newStatus;
     currentHardwareState.powerDraw = newPower;
 
-    console.log(`[BI-DIRECTIONAL CONTROL] Operator toggled relay to: ${newStatus}`);
+    console.log(`[HARDWARE TOGGLE] Relay set to: ${newStatus}`);
 
-    // Broadcast to physical Arduino & WebAR clients simultaneously
     io.emit('relayHardwareCommand', { command: newStatus });
     io.emit('twinStateUpdate', {
         smart_power_relay: {
@@ -164,12 +160,12 @@ app.post('/api/hardware/relay/toggle', (req, res) => {
     res.json({ status: "success", newState: newStatus, powerDraw: newPower });
 });
 
-// Endpoint for non-WebSocket Arduinos to poll command state
+// Arduino GET polling endpoint
 app.get('/api/hardware/relay/status', (req, res) => {
     res.json({ command: currentHardwareState.relayStatus });
 });
 
-// Diagnostic Test Route
+// Test Telemetry Route
 app.get('/api/test-telemetry', (req, res) => {
     io.emit('climateStateUpdate', {
         temperature: "76.4",
@@ -189,12 +185,11 @@ app.get('/api/test-telemetry', (req, res) => {
 // REAL-TIME WEBSOCKET MANAGEMENT
 // ==============================================================
 io.on('connection', (socket) => {
-    console.log(`[WEBAR CLIENT CONNECTED] ID: ${socket.id}`);
+    console.log(`[CLIENT CONNECTED] ID: ${socket.id}`);
 
     const db = readDB();
     socket.emit('spatialAnchorsUpdated', db.anchors || db);
 
-    // Allow WebAR client to directly trigger relay toggle via WebSocket
     socket.on('toggleRelay', () => {
         const newStatus = currentHardwareState.relayStatus === "ON" ? "OFF" : "ON";
         const newPower = newStatus === "ON" ? "0.42" : "0.0";
@@ -212,7 +207,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        console.log(`[WEBAR CLIENT DISCONNECTED] ID: ${socket.id}`);
+        console.log(`[CLIENT DISCONNECTED] ID: ${socket.id}`);
     });
 });
 
@@ -222,7 +217,8 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`==================================================`);
-    console.log(`  NOEMATA SPATIAL SERVER ACTIVE ON PORT ${PORT}`);
-    console.log(`  READY FOR HARDWARE TELEMETRY & TWO-WAY AR CONTROL`);
+    console.log(`  NOEMATA DUAL PIPELINE ACTIVE ON PORT ${PORT}`);
+    console.log(`  STEP 1 QUEST SETUP:  https://your-domain/setup.html`);
+    console.log(`  STEP 2 PHONE VIEWER: https://your-domain/`);
     console.log(`==================================================`);
 });

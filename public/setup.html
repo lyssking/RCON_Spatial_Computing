@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>NOEMATA // SPATIAL ANCHOR CALIBRATOR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOEMATA // QUEST SPATIAL MAPPER</title>
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
@@ -12,204 +12,31 @@
             background: transparent !important;
             margin: 0; padding: 0; overflow: hidden;
             width: 100%; height: 100%;
-            touch-action: none;
-            user-select: none;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
         }
-
-        /* 2D SCREEN OVERLAY HUD */
-        #mobile-overlay {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            box-sizing: border-box;
-            padding: 16px;
-            z-index: 10000;
-        }
-
-        .hud-card {
-            background: rgba(13, 17, 23, 0.90);
-            border: 1px solid #00f0ff;
-            border-radius: 10px;
-            padding: 12px 14px;
-            color: #ffffff;
-            backdrop-filter: blur(8px);
-            box-shadow: 0 4px 20px rgba(0, 240, 255, 0.2);
-            pointer-events: auto;
-            text-align: center;
-        }
-
-        #target-title {
-            margin: 0;
-            font-size: 15px;
-            font-weight: 700;
-            color: #00f0ff;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-
-        #coord-readout {
-            margin: 6px 0 0 0;
-            font-size: 13px;
-            color: #39ff14;
-            font-family: monospace;
-        }
-
-        /* FINE-TUNING NUDGE CONTROLS */
-        .nudge-controls {
-            display: flex;
-            justify-content: space-between;
-            pointer-events: auto;
-            margin-bottom: 8px;
-            gap: 8px;
-        }
-
-        .nudge-group {
-            display: flex;
-            background: rgba(13, 17, 23, 0.85);
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            overflow: hidden;
-            flex: 1;
-            justify-content: space-between;
-            align-items: center;
-            padding: 4px 8px;
-        }
-
-        .nudge-label {
-            font-size: 11px;
-            color: #94a3b8;
-            font-family: monospace;
-            font-weight: bold;
-        }
-
-        .nudge-btn {
-            background: #1e293b;
-            color: #00f0ff;
-            border: 1px solid #00f0ff;
-            border-radius: 4px;
-            width: 32px;
-            height: 32px;
-            font-size: 16px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-        }
-
-        /* BOTTOM ACTION BUTTONS */
-        .button-bar {
-            display: flex;
-            gap: 10px;
-            pointer-events: auto;
-            width: 100%;
-        }
-
-        .screen-btn {
-            flex: 1;
-            padding: 14px 8px;
-            border: none;
-            border-radius: 8px;
-            font-family: monospace;
-            font-weight: bold;
-            font-size: 14px;
-            cursor: pointer;
-            text-transform: uppercase;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            outline: none;
-        }
-
-        #btn-next {
-            background: #1e293b;
-            color: #00f0ff;
-            border: 1px solid #00f0ff;
-        }
-
-        #btn-lock {
-            background: #00f0ff;
-            color: #000000;
-            box-shadow: 0 0 15px rgba(0, 240, 255, 0.6);
-        }
-
-        #btn-lock.locked {
-            background: #ff0055;
-            color: #ffffff;
-            box-shadow: 0 0 15px rgba(255, 0, 85, 0.6);
-        }
-
-        #btn-save {
-            background: #334155;
-            color: #64748b;
-        }
-
-        #btn-save.active {
-            background: #39ff14;
-            color: #000000;
-            box-shadow: 0 0 15px rgba(57, 255, 20, 0.6);
-        }
-
         #custom-ar-btn {
             position: absolute;
             bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
+            right: 30px;
             z-index: 99999;
-            padding: 18px 32px;
+            padding: 18px 36px;
             background: #00f0ff;
             color: #000;
             border: none;
             border-radius: 8px;
             font-family: monospace;
             font-weight: bold;
-            font-size: 16px;
+            font-size: 18px;
             cursor: pointer;
-            box-shadow: 0 0 25px rgba(0, 240, 255, 0.8);
-            pointer-events: auto;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.7);
         }
     </style>
 </head>
 <body style="margin: 0; overflow: hidden; background: transparent !important;">
 
-    <!-- 2D SCREEN OVERLAY -->
-    <div id="mobile-overlay" style="display: none;">
-        <!-- Top Status Card -->
-        <div class="hud-card">
-            <div id="target-title">TARGET: SMART CLIMATE NODE</div>
-            <div id="coord-readout">X: 0.00 | Y: 1.40 | Z: -1.20</div>
-        </div>
-
-        <div>
-            <!-- Fine-Tuning Nudge Sliders -->
-            <div class="nudge-controls">
-                <div class="nudge-group">
-                    <span class="nudge-label">DIST</span>
-                    <button class="nudge-btn" id="btn-dist-near">-</button>
-                    <button class="nudge-btn" id="btn-dist-far">+</button>
-                </div>
-                <div class="nudge-group">
-                    <span class="nudge-label">HEIGHT</span>
-                    <button class="nudge-btn" id="btn-height-down">-</button>
-                    <button class="nudge-btn" id="btn-height-up">+</button>
-                </div>
-            </div>
-
-            <!-- Bottom Stagnant Buttons -->
-            <div class="button-bar">
-                <button class="screen-btn" id="btn-next">NEXT NODE</button>
-                <button class="screen-btn" id="btn-lock">LOCK SPOT</button>
-                <button class="screen-btn" id="btn-save">SAVE</button>
-            </div>
-        </div>
-    </div>
-
-    <button id="custom-ar-btn">LAUNCH AR SETUP</button>
+    <button id="custom-ar-btn">ENTER QUEST PASSTHROUGH MAPPER</button>
 
     <script>
+        // Force Canvas Transparency for Quest Passthrough
         AFRAME.registerComponent('force-ar-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -224,63 +51,133 @@
             }
         });
 
-        // SMOOTHED CAMERA-PROJECTION PLACEMENT (NO GLITCHING)
-        AFRAME.registerComponent('smooth-gaze-placer', {
+        // 6DoF Quest Controller Surface Snapping Component
+        AFRAME.registerComponent('quest-spatial-manager', {
             init: function () {
-                this.cameraEl = document.getElementById('main-camera');
+                this.xrHitTestSource = null;
+                this.viewerSpace = null;
+                this.refSpace = null;
                 this.previewEl = document.getElementById('placement-preview');
-                this.currentPos = new THREE.Vector3(0, 1.4, -1.2);
-                this.targetPos = new THREE.Vector3();
-                this.distanceOffset = 1.2; // default 1.2m in front
-                this.heightOffset = 0.0;   // vertical nudge offset
+
+                this.el.sceneEl.addEventListener('enter-vr', () => {
+                    const session = this.el.sceneEl.xrSession;
+                    if (!session) return;
+
+                    session.requestReferenceSpace('viewer').then((refSpace) => {
+                        this.viewerSpace = refSpace;
+                        session.requestHitTestSource({ space: this.viewerSpace }).then((source) => {
+                            this.xrHitTestSource = source;
+                        }).catch(e => console.log('Hit-test source error:', e));
+                    }).catch(e => console.log('Viewer space error:', e));
+
+                    session.requestReferenceSpace('local-floor').catch(() => {
+                        return session.requestReferenceSpace('local');
+                    }).then((refSpace) => {
+                        this.refSpace = refSpace;
+                    });
+
+                    // Pull trigger on Quest controller to lock target reticle
+                    session.addEventListener('select', () => {
+                        if (!window.isHoveringButton && window.latestHitPos && !window.isPosLocked) {
+                            window.isPosLocked = true;
+                            window.lockedCoords = { ...window.latestHitPos };
+
+                            const statusLabel = document.getElementById('hud-status-label');
+                            const saveBtn = document.getElementById('btn-save-device');
+                            const saveBtnText = document.getElementById('save-btn-text');
+
+                            if (statusLabel) {
+                                statusLabel.setAttribute('value', 'SURFACE LOCKED! CLICK CREATE ANCHOR.');
+                                statusLabel.setAttribute('color', '#39ff14');
+                            }
+                            if (saveBtn) saveBtn.setAttribute('color', '#00f0ff');
+                            if (saveBtnText) saveBtnText.setAttribute('color', '#000000');
+                        }
+                    });
+                });
             },
 
             tick: function () {
-                if (window.isPosLocked || !this.cameraEl || !this.previewEl) return;
+                if (!this.xrHitTestSource || !this.refSpace || window.isPosLocked) return;
 
-                // 1. Get forward vector from phone camera
-                const camObj = this.cameraEl.object3D;
-                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camObj.quaternion);
+                const frame = this.el.sceneEl.frame;
+                if (!frame) return;
 
-                // 2. Project target position ahead of phone
-                this.targetPos.copy(camObj.position).add(forward.multiplyScalar(this.distanceOffset));
-                this.targetPos.y += this.heightOffset;
+                const hitTestResults = frame.getHitTestResults(this.xrHitTestSource);
+                if (hitTestResults.length > 0) {
+                    const pose = hitTestResults[0].getPose(this.refSpace);
+                    if (pose) {
+                        const p = pose.transform.position;
+                        const q = pose.transform.orientation;
 
-                // 3. Smooth LERP interpolation to kill sensor jitter (15% per frame)
-                this.currentPos.lerp(this.targetPos, 0.15);
+                        this.previewEl.object3D.position.set(p.x, p.y, p.z);
+                        this.previewEl.object3D.quaternion.set(q.x, q.y, q.z, q.w);
+                        this.previewEl.setAttribute('visible', 'true');
 
-                this.previewEl.object3D.position.copy(this.currentPos);
-                this.previewEl.setAttribute('visible', 'true');
-
-                window.latestCalculatedPos = {
-                    x: parseFloat(this.currentPos.x.toFixed(3)),
-                    y: parseFloat(this.currentPos.y.toFixed(3)),
-                    z: parseFloat(this.currentPos.z.toFixed(3))
-                };
-
-                // Update real-time coordinates on screen
-                const readout = document.getElementById('coord-readout');
-                if (readout) {
-                    readout.innerText = `X: ${window.latestCalculatedPos.x} | Y: ${window.latestCalculatedPos.y} | Z: ${window.latestCalculatedPos.z}`;
+                        window.latestHitPos = { 
+                            x: parseFloat(p.x.toFixed(3)), 
+                            y: parseFloat(p.y.toFixed(3)), 
+                            z: parseFloat(p.z.toFixed(3)) 
+                        };
+                    }
                 }
             }
         });
     </script>
 
-    <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: dom-overlay; overlayElement: #mobile-overlay; referenceSpaceType: local-floor;"
+    <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: anchors; referenceSpaceType: local-floor;"
              force-ar-passthrough
-             smooth-gaze-placer
+             quest-spatial-manager
              renderer="alpha: true; colorManagement: true; antialias: true;"
              xr-mode-ui="enabled: false">
         
-        <a-entity id="main-camera" camera look-controls position="0 1.6 0"></a-entity>
-        <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
+        <!-- Camera Rig -->
+        <a-entity id="rig" position="0 0 0">
+            <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
+        </a-entity>
 
-        <!-- STABLE SMOOTHED TARGET RETICLE -->
+        <!-- Quest Left & Right 6DoF Laser Controllers -->
+        <a-entity laser-controls="hand: left" raycaster="objects: .ui-button; far: 10;"></a-entity>
+        <a-entity laser-controls="hand: right" raycaster="objects: .ui-button; far: 10;"></a-entity>
+
+        <!-- FLOATING CYBERNETIC CONTROL PANEL -->
+        <a-entity id="world-terminal" position="0 1.4 -1.4">
+            <a-plane width="1.3" height="0.7" color="#0d1117" opacity="0.94" material="shader: flat; depthTest: false;"></a-plane>
+            <a-plane width="1.34" height="0.74" color="#00f0ff" opacity="0.35" position="0 0 -0.005" material="shader: flat; depthTest: false;"></a-plane>
+
+            <a-text id="hud-device-label" 
+                    value="TARGET: SMART CLIMATE NODE" 
+                    color="#00f0ff" 
+                    align="center" 
+                    width="1.8" 
+                    position="0 0.22 0.01" 
+                    font="monoid">
+            </a-text>
+
+            <a-text id="hud-status-label" 
+                    value="AIM CONTROLLER & SQUEEZE TRIGGER TO LOCK" 
+                    color="#94a3b8" 
+                    align="center" 
+                    width="1.3" 
+                    position="0 0.08 0.01" 
+                    font="monoid">
+            </a-text>
+
+            <!-- Toggle Next Device Button -->
+            <a-plane class="ui-button" id="btn-toggle-device" width="0.52" height="0.14" color="#1e293b" position="-0.32 -0.16 0.02" material="shader: flat; depthTest: false;">
+                <a-text value="[ NEXT DEVICE ]" color="#00f0ff" width="1.2" align="center" position="0 0 0.01" font="monoid"></a-text>
+            </a-plane>
+
+            <!-- Save Anchor Button -->
+            <a-plane class="ui-button" id="btn-save-device" width="0.52" height="0.14" color="#334155" position="0.32 -0.16 0.02" material="shader: flat; depthTest: false;">
+                <a-text id="save-btn-text" value="[ CREATE ANCHOR ]" color="#94a3b8" width="1.2" align="center" position="0 0 0.01" font="monoid"></a-text>
+            </a-plane>
+        </a-entity>
+
+        <!-- GREEN TARGET RETICLE -->
         <a-entity id="placement-preview" visible="false">
-            <a-ring radius-inner="0.08" radius-outer="0.1" color="#00f0ff" rotation="-90 0 0" material="shader: flat; depthTest: false;"></a-ring>
-            <a-box width="0.14" height="0.14" depth="0.14" material="color: #00f0ff; wireframe: true; depthTest: false;" position="0 0.07 0"></a-box>
-            <a-sphere radius="0.02" color="#39ff14" position="0 0.07 0" material="shader: flat; depthTest: false;"></a-sphere>
+            <a-ring radius-inner="0.08" radius-outer="0.1" color="#39ff14" rotation="-90 0 0" material="shader: flat; depthTest: false;"></a-ring>
+            <a-box width="0.12" height="0.12" depth="0.12" material="color: #39ff14; wireframe: true; depthTest: false;" position="0 0.06 0"></a-box>
         </a-entity>
 
     </a-scene>
@@ -289,8 +186,9 @@
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
 
         window.isPosLocked = false;
-        window.latestCalculatedPos = { x: 0, y: 1.4, z: -1.2 };
+        window.latestHitPos = null;
         window.lockedCoords = null;
+        window.isHoveringButton = false;
 
         const devices = [
             { key: 'smart_climate_node', label: 'TARGET: SMART CLIMATE NODE' },
@@ -299,119 +197,63 @@
         ];
         let currentDeviceIndex = 0;
 
-        const targetTitle = document.getElementById('target-title');
-        const coordReadout = document.getElementById('coord-readout');
-        const btnNext = document.getElementById('btn-next');
-        const btnLock = document.getElementById('btn-lock');
-        const btnSave = document.getElementById('btn-save');
+        const deviceLabel = document.getElementById('hud-device-label');
+        const statusLabel = document.getElementById('hud-status-label');
+        const toggleBtn = document.getElementById('btn-toggle-device');
+        const saveBtn = document.getElementById('btn-save-device');
+        const saveBtnText = document.getElementById('save-btn-text');
 
-        // Distance & Height Nudge Handlers
-        const placerComponent = () => document.querySelector('a-scene').components['smooth-gaze-placer'];
-
-        document.getElementById('btn-dist-near').addEventListener('click', (e) => {
-            e.stopPropagation();
-            const placer = placerComponent();
-            if (placer && placer.distanceOffset > 0.4) placer.distanceOffset -= 0.15;
+        [toggleBtn, saveBtn].forEach(btn => {
+            btn.addEventListener('raycaster-intersected', () => { window.isHoveringButton = true; });
+            btn.addEventListener('raycaster-intersected-cleared', () => { window.isHoveringButton = false; });
         });
 
-        document.getElementById('btn-dist-far').addEventListener('click', (e) => {
-            e.stopPropagation();
-            const placer = placerComponent();
-            if (placer && placer.distanceOffset < 4.0) placer.distanceOffset += 0.15;
-        });
-
-        document.getElementById('btn-height-down').addEventListener('click', (e) => {
-            e.stopPropagation();
-            const placer = placerComponent();
-            if (placer) placer.heightOffset -= 0.1;
-        });
-
-        document.getElementById('btn-height-up').addEventListener('click', (e) => {
-            e.stopPropagation();
-            const placer = placerComponent();
-            if (placer) placer.heightOffset += 0.1;
-        });
-
-        // 1. Next Node Button
-        btnNext.addEventListener('click', (e) => {
-            e.stopPropagation();
+        toggleBtn.addEventListener('click', () => {
             currentDeviceIndex = (currentDeviceIndex + 1) % devices.length;
-            targetTitle.innerText = devices[currentDeviceIndex].label;
-            unlock();
+            deviceLabel.setAttribute('value', devices[currentDeviceIndex].label);
+            resetLock();
         });
 
-        // 2. Lock Spot Button
-        btnLock.addEventListener('click', (e) => {
-            e.stopPropagation();
-
-            if (!window.isPosLocked) {
-                window.isPosLocked = true;
-                window.lockedCoords = { ...window.latestCalculatedPos };
-
-                btnLock.innerText = "UNLOCK";
-                btnLock.classList.add('locked');
-
-                btnSave.classList.add('active');
-                btnSave.innerText = "SAVE POSITION";
-
-                coordReadout.innerText = `LOCKED: X:${window.lockedCoords.x} Y:${window.lockedCoords.y} Z:${window.lockedCoords.z}`;
-                coordReadout.style.color = "#ff0055";
-            } else {
-                unlock();
-            }
-        });
-
-        function unlock() {
-            window.isPosLocked = false;
-            window.lockedCoords = null;
-
-            btnLock.innerText = "LOCK SPOT";
-            btnLock.classList.remove('locked');
-
-            btnSave.classList.remove('active');
-            btnSave.innerText = "SAVE";
-
-            coordReadout.style.color = "#39ff14";
-        }
-
-        // 3. Save Button
-        btnSave.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (!window.lockedCoords) {
-                coordReadout.innerText = "Lock position before saving!";
-                coordReadout.style.color = "#ff0055";
-                return;
-            }
+        saveBtn.addEventListener('click', async () => {
+            if (!window.lockedCoords) return;
 
             const activeKey = devices[currentDeviceIndex].key;
-            coordReadout.innerText = `Saving ${activeKey}...`;
-            coordReadout.style.color = "#00f0ff";
+            statusLabel.setAttribute('value', 'TRANSMITTING COORDS TO RENDER DB...');
+            statusLabel.setAttribute('color', '#00f0ff');
 
             fetch('/api/spatial/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    deviceId: activeKey,
+                body: JSON.stringify({ 
+                    deviceId: activeKey, 
                     position: window.lockedCoords
                 })
             })
             .then(res => res.json())
             .then(() => {
-                coordReadout.innerText = `SAVED ${activeKey.toUpperCase()}!`;
-                coordReadout.style.color = "#39ff14";
-                setTimeout(() => unlock(), 1800);
+                statusLabel.setAttribute('value', `SAVED ${activeKey.toUpperCase()}!`);
+                statusLabel.setAttribute('color', '#39ff14');
+                setTimeout(() => resetLock(), 1800);
             })
             .catch(err => {
-                coordReadout.innerText = "Error saving position!";
-                coordReadout.style.color = "#ff0055";
+                statusLabel.setAttribute('value', 'ERROR SAVING POSITION');
+                statusLabel.setAttribute('color', '#ff0055');
             });
         });
 
-        // Launch AR with DOM Overlay
+        function resetLock() {
+            window.isPosLocked = false;
+            window.lockedCoords = null;
+            saveBtn.setAttribute('color', '#334155');
+            saveBtnText.setAttribute('color', '#94a3b8');
+            statusLabel.setAttribute('value', 'AIM CONTROLLER & SQUEEZE TRIGGER TO LOCK');
+            statusLabel.setAttribute('color', '#94a3b8');
+        }
+
+        // Quest enterAR launcher
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const sceneEl = document.querySelector('a-scene');
-            const launchBtn = document.getElementById('custom-ar-btn');
-            const overlay = document.getElementById('mobile-overlay');
+            const button = document.getElementById('custom-ar-btn');
 
             const launch = () => {
                 if (sceneEl.enterAR) {
@@ -419,8 +261,7 @@
                 } else {
                     sceneEl.enterVR();
                 }
-                launchBtn.style.display = 'none';
-                overlay.style.display = 'flex';
+                button.style.display = 'none';
             };
 
             if (sceneEl.hasLoaded) {

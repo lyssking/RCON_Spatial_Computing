@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>NOEMATA // SPATIAL ROOM TELEMETRY</title>
+    <title>NOEMATA // OPERATOR SPATIAL HUD</title>
     
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <!-- Lightweight QR fallback engine for iOS Safari & Android -->
+    <!-- Ultra-fast QR scanner engine for mobile browsers -->
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 
     <style>
@@ -19,7 +19,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
         }
 
-        /* 1. PRE-AR SCANNER MODAL */
+        /* 1. DOORFRAME QR SCANNER MODAL */
         #door-scan-screen {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -76,7 +76,7 @@
             font-size: 13px; cursor: pointer;
         }
 
-        /* 2. AR STAGNANT TOUCHSCREEN OVERLAY */
+        /* 2. STAGNANT 2D SCREEN OVERLAY DURING ACTIVE WEBAR */
         #mobile-ar-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -129,7 +129,7 @@
 </head>
 <body style="margin: 0; overflow: hidden; background: transparent !important;">
 
-    <!-- 1. PRE-AR DOORFRAME SCAN MODAL -->
+    <!-- 1. PRE-AR DOORFRAME SCANNER MODAL -->
     <div id="door-scan-screen">
         <div class="scan-header">
             <h1>NOEMATA // SPATIAL INITIALIZER</h1>
@@ -149,11 +149,11 @@
         </div>
     </div>
 
-    <!-- 2. STAGNANT 2D SCREEN OVERLAY DURING ACTIVE AR -->
+    <!-- 2. STAGNANT 2D TOUCHSCREEN OVERLAY -->
     <div id="mobile-ar-overlay" style="display: none;">
         <div class="ar-status-banner">
-            <h2>ORIGIN: DOORFRAME [LOCKED]</h2>
-            <span id="overlay-sync-state">FACILITY SPATIAL MAP SYNCHRONIZED</span>
+            <h2>ORIGIN: DOORFRAME [SYNCHRONIZED]</h2>
+            <span id="overlay-sync-state">ROOM TWIN LOADED FROM QUEST MAP</span>
         </div>
 
         <div class="ar-control-bar">
@@ -163,7 +163,6 @@
     </div>
 
     <script>
-        // Force WebGL Alpha Transparency for Passthrough
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -178,7 +177,7 @@
             }
         });
 
-        // Billboard Component: Ensures 3D HUD panels continuously rotate to face user
+        // Billboard Component: Ensures 3D HUD panels continuously rotate to face phone camera
         AFRAME.registerComponent('billboard', {
             tick: function () {
                 const cam = document.getElementById('main-camera');
@@ -205,7 +204,7 @@
         });
     </script>
 
-    <!-- WebXR Scene with DOM Overlay Support -->
+    <!-- Native A-Frame Scene with DOM Overlay Support -->
     <a-scene force-passthrough
              webxr="requiredFeatures: local-floor; optionalFeatures: dom-overlay; overlayElement: #mobile-ar-overlay; referenceSpaceType: local-floor;"
              renderer="alpha: true; colorManagement: true; antialias: true;"
@@ -225,11 +224,11 @@
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
-        <!-- MASTER WORLD ZERO CONTAINER (ALIGNED TO DOORFRAME ORIGIN) -->
+        <!-- MASTER WORLD ZERO CONTAINER (LOCKED TO DOORFRAME ORIGIN) -->
         <a-entity id="noemata-spatial-anchor" position="0 0 0">
 
             <!-- 1. SMART CLIMATE NODE -->
-            <a-entity id="smart-climate-asset" position="0 1.4 -2.5" billboard>
+            <a-entity id="smart-climate-asset" position="-0.868 -0.289 -0.301" billboard>
                 <a-box class="gaze-target" gaze-hud-manager width="0.18" height="0.18" depth="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-box>
                 <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.3" align="center" color="#00f0ff" font="monoid"></a-text>
 
@@ -242,7 +241,7 @@
             </a-entity>
 
             <!-- 2. PERIMETER MONITOR -->
-            <a-entity id="perimeter-monitor-asset" position="-1.2 1.2 -3.0" billboard>
+            <a-entity id="perimeter-monitor-asset" position="1.051 -2.719 -1.409" billboard>
                 <a-cylinder class="gaze-target" gaze-hud-manager radius="0.12" height="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-cylinder>
                 <a-text value="[ PERIMETER GUARD ]" position="0 0.18 0" width="1.3" align="center" color="#64748b" font="monoid"></a-text>
 
@@ -255,7 +254,7 @@
             </a-entity>
 
             <!-- 3. SMART POWER RELAY -->
-            <a-entity id="smart-relay-asset" position="1.2 0.9 -1.8" billboard>
+            <a-entity id="smart-relay-asset" position="1.716 -0.858 -0.481" billboard>
                 <a-box id="relay-3d-box" class="gaze-target" gaze-hud-manager width="0.15" height="0.15" depth="0.15" material="color: #64748b; shader: flat; wireframe: true; depthTest: false;"></a-box>
                 <a-text value="[ POWER RELAY ]" position="0 0.18 0" width="1.3" align="center" color="#64748b" font="monoid"></a-text>
 
@@ -332,7 +331,6 @@
                     ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
                     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-                    // Scan using jsQR engine
                     const code = jsQR(imgData.data, imgData.width, imgData.height);
                     if (code && (code.data.includes("doorframe") || code.data.includes("noemata"))) {
                         clearInterval(scanInterval);
@@ -346,7 +344,6 @@
             scanStatus.innerText = `> DOORFRAME ALIGNED (${qrValue})! LAUNCHING AR...`;
             scanStatus.style.color = "#00f0ff";
 
-            // Stop standard video stream before entering WebXR
             if (cameraStream) {
                 cameraStream.getTracks().forEach(t => t.stop());
             }
@@ -389,7 +386,6 @@
             }
         }
 
-        // Re-anchors World Zero (0,0,0) directly to the phone's doorframe position
         function recenterToCurrentPose() {
             const cameraEl = document.getElementById('main-camera');
             const spatialAnchor = document.getElementById('noemata-spatial-anchor');
@@ -398,7 +394,6 @@
                 const camPos = cameraEl.object3D.position;
                 const camRot = cameraEl.object3D.rotation;
 
-                // Lock the root container to the user's standing origin at the door
                 spatialAnchor.object3D.position.set(camPos.x, 0, camPos.z);
                 spatialAnchor.object3D.rotation.set(0, camRot.y, 0);
 
@@ -407,13 +402,11 @@
             }
         }
 
-        // Tap-to-Resync Button
         document.getElementById('btn-resync').addEventListener('click', (e) => {
             e.stopPropagation();
             recenterToCurrentPose();
         });
 
-        // Stagnant Hardware Control Button
         document.getElementById('btn-hardware-toggle').addEventListener('click', (e) => {
             e.stopPropagation();
             fetch('/api/hardware/relay/toggle', { method: 'POST' })
@@ -478,7 +471,6 @@
             }
         });
 
-        // Initialize Doorframe Camera Scanner on load
         window.addEventListener('DOMContentLoaded', initDoorframeCamera);
     </script>
 </body>
