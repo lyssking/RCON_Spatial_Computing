@@ -10,9 +10,7 @@
         :root {
             --bg-card: rgba(15, 23, 42, 0.88);
             --border: rgba(255, 255, 255, 0.12);
-            --accent: #38bdf8;
             --success: #34d399;
-            --danger: #f87171;
             --text: #f8fafc;
         }
 
@@ -25,7 +23,6 @@
 
         .a-canvas { background-color: transparent !important; }
 
-        /* MINIMAL EXECUTIVE HUD OVERLAY */
         #mobile-hud {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; justify-content: space-between;
@@ -51,62 +48,25 @@
             flex: 1; padding: 15px 12px; border-radius: 14px; font-size: 14px; font-weight: 600;
             cursor: pointer; border: 1px solid var(--border); background: var(--bg-card);
             color: #fff; backdrop-filter: blur(16px);
-            transition: all 0.15s ease;
         }
-        .btn:active { transform: scale(0.97); }
 
         #btn-power { background: #fff; color: #0f172a; border: none; }
-
-        /* PRE-LAUNCH MODAL */
-        #launch-screen {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #090d16; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; padding: 24px;
-            box-sizing: border-box; z-index: 99999; text-align: center;
-        }
-
-        .launch-btn {
-            margin-top: 24px; padding: 16px 36px; background: #fff; color: #0f172a;
-            border-radius: 14px; font-size: 16px; font-weight: 600; border: none; cursor: pointer;
-            box-shadow: 0 4px 25px rgba(255,255,255,0.2);
-        }
     </style>
 </head>
 <body>
 
-    <div id="launch-screen">
-        <h1 style="font-size: 22px; font-weight: 700; margin: 0 0 8px 0;">Noemata Vision</h1>
-        <p style="color: #94a3b8; margin: 0; font-size: 14px;">Stand at door threshold facing into facility</p>
-        <button class="launch-btn" id="btn-start">ENTER FACILITY AR</button>
-    </div>
-
-    <div id="mobile-hud" style="display: none;">
+    <div id="mobile-hud">
         <div class="status-pill">
             <div class="dot"></div>
-            <span id="hud-status">Live Telemetry Synchronized</span>
+            <span id="hud-status">Telemetry Synchronized</span>
         </div>
         <div class="btn-bottom-bar">
             <button class="btn" id="btn-recenter">Re-Center (At Door)</button>
-            <button class="btn" id="btn-power">Power: ON</button>
+            <button class="btn" id="btn-power">Power: Toggle</button>
         </div>
     </div>
 
     <script>
-        AFRAME.registerComponent('force-passthrough', {
-            init: function () {
-                const scene = this.el;
-                const setTransparent = () => {
-                    if (scene.renderer) {
-                        scene.renderer.setClearColor(0x000000, 0);
-                        scene.renderer.alpha = true;
-                    }
-                };
-                scene.addEventListener('render-target-loaded', setTransparent);
-                scene.addEventListener('enter-vr', setTransparent);
-            }
-        });
-
-        // Smooth Billboard LookAt
         AFRAME.registerComponent('billboard', {
             tick: function () {
                 const cam = document.getElementById('main-camera');
@@ -118,10 +78,10 @@
         });
     </script>
 
-    <a-scene force-passthrough
-             webxr="referenceSpaceType: local-floor;"
+    <a-scene embedded
+             webxr="optionalFeatures: hit-test, local-floor;"
              renderer="alpha: true; antialias: true;"
-             xr-mode-ui="enabled: false">
+             vr-mode-ui="enabled: true">
 
         <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
         <a-entity light="type: ambient; intensity: 1.5;"></a-entity>
@@ -149,7 +109,7 @@
                 </a-plane>
             </a-entity>
 
-            <!-- 3. SMART POWER RELAY -->
+            <!-- 3. POWER RELAY -->
             <a-entity id="smart-relay-asset" position="1.45 1.20 -1.80" billboard>
                 <a-box id="relay-3d-box" width="0.14" height="0.14" depth="0.14" material="color: #34d399; opacity: 0.9;"></a-box>
                 <a-text value="Power Relay" position="0 0.16 0" width="1.2" align="center" color="#ffffff" font="roboto"></a-text>
@@ -190,20 +150,9 @@
             const cam = document.getElementById('main-camera');
             const root = document.getElementById('root-anchor');
             if (cam && root) {
-                // Instantly align root to phone's current floor position
                 root.object3D.position.set(cam.object3D.position.x, 0, cam.object3D.position.z);
             }
         }
-
-        document.getElementById('btn-start').addEventListener('click', () => {
-            document.getElementById('launch-screen').style.display = 'none';
-            document.getElementById('mobile-hud').style.display = 'flex';
-
-            const scene = document.querySelector('a-scene');
-            if (scene.enterAR) scene.enterAR(); else scene.enterVR();
-
-            setTimeout(setFloorOrigin, 250);
-        });
 
         document.getElementById('btn-recenter').addEventListener('click', (e) => {
             e.stopPropagation();
@@ -215,7 +164,7 @@
             fetch('/api/hardware/relay/toggle', { method: 'POST' });
         });
 
-        // Telemetry Update Handlers
+        // Telemetry Listeners
         socket.on('climateStateUpdate', d => {
             const statusEl = document.getElementById('txt-climate-status');
             const metricsEl = document.getElementById('txt-climate-metrics');
