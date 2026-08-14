@@ -32,7 +32,6 @@
             background-color: transparent !important;
         }
 
-        /* 1. CLEAN SCANNER SCREEN */
         #door-scan-screen {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -114,7 +113,6 @@
             padding: 8px;
         }
 
-        /* 2. MINIMAL AR OVERLAY */
         #mobile-ar-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -174,7 +172,6 @@
 </head>
 <body>
 
-    <!-- 1. PRE-AR SCANNER MODAL -->
     <div id="door-scan-screen">
         <div class="scan-header">
             <h1>Noemata Vision</h1>
@@ -193,7 +190,6 @@
         </div>
     </div>
 
-    <!-- 2. STAGNANT GLASS OVERLAY -->
     <div id="mobile-ar-overlay" style="display: none;">
         <div class="ar-status-pill">
             <div class="status-dot"></div>
@@ -246,13 +242,11 @@
         });
     </script>
 
-    <!-- Native A-Frame Scene -->
     <a-scene force-passthrough
              webxr="referenceSpaceType: local-floor;"
              renderer="alpha: true; colorManagement: true; antialias: true;"
              xr-mode-ui="enabled: false">
 
-        <!-- Camera Rig & Subtle Pointer -->
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
                 <a-entity cursor="fuse: false;"
@@ -266,11 +260,11 @@
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
-        <!-- MASTER WORLD ZERO CONTAINER (ALIGNED TO DOORWAY DATUM) -->
+        <!-- MASTER WORLD ZERO CONTAINER (ALIGNED TO STICKER) -->
         <a-entity id="noemata-spatial-anchor" position="0 0 0">
 
             <!-- 1. CLIMATE SENSOR -->
-            <a-entity id="smart-climate-asset" position="-0.868 0 -0.301" billboard>
+            <a-entity id="smart-climate-asset" position="0 0 -2.0" billboard>
                 <a-box class="gaze-target" gaze-hud-manager width="0.14" height="0.14" depth="0.14" material="color: #38bdf8; shader: flat; opacity: 0.85; depthTest: false;"></a-box>
                 <a-text value="Climate Sensor" position="0 0.16 0" width="1.2" align="center" color="#ffffff" font="roboto"></a-text>
 
@@ -282,7 +276,7 @@
             </a-entity>
 
             <!-- 2. PERIMETER GUARD -->
-            <a-entity id="perimeter-monitor-asset" position="1.051 0 -1.409" billboard>
+            <a-entity id="perimeter-monitor-asset" position="0 0 -2.0" billboard>
                 <a-cylinder class="gaze-target" gaze-hud-manager radius="0.08" height="0.16" material="color: #60a5fa; shader: flat; opacity: 0.85; depthTest: false;"></a-cylinder>
                 <a-text value="Perimeter Monitor" position="0 0.16 0" width="1.2" align="center" color="#ffffff" font="roboto"></a-text>
 
@@ -294,7 +288,7 @@
             </a-entity>
 
             <!-- 3. POWER RELAY -->
-            <a-entity id="smart-relay-asset" position="1.716 0 -0.481" billboard>
+            <a-entity id="smart-relay-asset" position="0 0 -2.0" billboard>
                 <a-box id="relay-3d-box" class="gaze-target" gaze-hud-manager width="0.14" height="0.14" depth="0.14" material="color: #94a3b8; shader: flat; opacity: 0.85; depthTest: false;"></a-box>
                 <a-text value="Power Relay" position="0 0.16 0" width="1.2" align="center" color="#ffffff" font="roboto"></a-text>
 
@@ -312,7 +306,7 @@
     <script>
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
 
-        // Apply Relative Offsets directly into the root anchor container
+        // Apply Relative Offsets directly from spatial-db.json
         function applyDynamicPositions(map) {
             if (!map) return;
             const targets = [
@@ -336,7 +330,6 @@
 
         socket.on('spatialAnchorsUpdated', (anchors) => applyDynamicPositions(anchors));
 
-        // Scanner Handlers
         const videoEl = document.getElementById('scanner-video');
         const scanStatus = document.getElementById('scan-status');
         const enterArBtn = document.getElementById('btn-enter-ar');
@@ -391,7 +384,6 @@
             }
         }
 
-        // True Vector Re-anchoring (Matches Quest Datum Matrix)
         function recenterToCurrentPose() {
             const cameraEl = document.getElementById('main-camera');
             const spatialAnchor = document.getElementById('noemata-spatial-anchor');
@@ -399,11 +391,10 @@
             if (cameraEl && spatialAnchor) {
                 const camObj = cameraEl.object3D;
 
-                // Extract pure horizontal yaw (no pitch distortion)
                 const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camObj.quaternion);
                 const horizontalYaw = Math.atan2(forward.x, forward.z);
 
-                // Re-center root container to exact phone doorway pose
+                // Zero out to phone camera scanning position at sticker
                 spatialAnchor.object3D.position.set(camObj.position.x, camObj.position.y, camObj.position.z);
                 spatialAnchor.object3D.rotation.set(0, horizontalYaw, 0);
 
