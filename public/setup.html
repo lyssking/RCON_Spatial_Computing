@@ -36,7 +36,6 @@
     <button id="custom-ar-btn">ENTER QUEST PASSTHROUGH MAPPER</button>
 
     <script>
-        // Force Canvas Transparency for Quest Passthrough
         AFRAME.registerComponent('force-ar-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -51,7 +50,7 @@
             }
         });
 
-        // 6DoF Quest Controller Surface Snapping Component
+        // 6DoF Quest Spatial Hit-Testing & Relative Coordinate Manager
         AFRAME.registerComponent('quest-spatial-manager', {
             init: function () {
                 this.xrHitTestSource = null;
@@ -76,18 +75,20 @@
                         this.refSpace = refSpace;
                     });
 
-                    // Pull trigger on Quest controller to lock target reticle
+                    // Controller Trigger locks hit position
                     session.addEventListener('select', () => {
-                        if (!window.isHoveringButton && window.latestHitPos && !window.isPosLocked) {
+                        if (!window.isHoveringButton && window.latestRawHitPos && !window.isPosLocked) {
                             window.isPosLocked = true;
-                            window.lockedCoords = { ...window.latestHitPos };
+
+                            // Calculate coordinate relative to doorframe datum
+                            window.lockedCoords = window.transformToOrigin(window.latestRawHitPos);
 
                             const statusLabel = document.getElementById('hud-status-label');
                             const saveBtn = document.getElementById('btn-save-device');
                             const saveBtnText = document.getElementById('save-btn-text');
 
                             if (statusLabel) {
-                                statusLabel.setAttribute('value', 'SURFACE LOCKED! CLICK CREATE ANCHOR.');
+                                statusLabel.setAttribute('value', `LOCKED: X:${window.lockedCoords.x} Y:${window.lockedCoords.y} Z:${window.lockedCoords.z}`);
                                 statusLabel.setAttribute('color', '#39ff14');
                             }
                             if (saveBtn) saveBtn.setAttribute('color', '#00f0ff');
@@ -114,10 +115,10 @@
                         this.previewEl.object3D.quaternion.set(q.x, q.y, q.z, q.w);
                         this.previewEl.setAttribute('visible', 'true');
 
-                        window.latestHitPos = { 
-                            x: parseFloat(p.x.toFixed(3)), 
-                            y: parseFloat(p.y.toFixed(3)), 
-                            z: parseFloat(p.z.toFixed(3)) 
+                        window.latestRawHitPos = { 
+                            x: p.x, 
+                            y: p.y, 
+                            z: p.z 
                         };
                     }
                 }
@@ -125,7 +126,7 @@
         });
     </script>
 
-    <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: anchors; referenceSpaceType: local-floor;"
+    <a-scene webxr="requiredFeatures: hit-test, local-floor; referenceSpaceType: local-floor;"
              force-ar-passthrough
              quest-spatial-manager
              renderer="alpha: true; colorManagement: true; antialias: true;"
@@ -140,37 +141,42 @@
         <a-entity laser-controls="hand: left" raycaster="objects: .ui-button; far: 10;"></a-entity>
         <a-entity laser-controls="hand: right" raycaster="objects: .ui-button; far: 10;"></a-entity>
 
-        <!-- FLOATING CYBERNETIC CONTROL PANEL -->
+        <!-- FLOATING CONTROL TERMINAL -->
         <a-entity id="world-terminal" position="0 1.4 -1.4">
-            <a-plane width="1.3" height="0.7" color="#0d1117" opacity="0.94" material="shader: flat; depthTest: false;"></a-plane>
-            <a-plane width="1.34" height="0.74" color="#00f0ff" opacity="0.35" position="0 0 -0.005" material="shader: flat; depthTest: false;"></a-plane>
+            <a-plane width="1.4" height="0.8" color="#0d1117" opacity="0.94" material="shader: flat; depthTest: false;"></a-plane>
+            <a-plane width="1.44" height="0.84" color="#00f0ff" opacity="0.35" position="0 0 -0.005" material="shader: flat; depthTest: false;"></a-plane>
 
             <a-text id="hud-device-label" 
                     value="TARGET: SMART CLIMATE NODE" 
                     color="#00f0ff" 
                     align="center" 
                     width="1.8" 
-                    position="0 0.22 0.01" 
+                    position="0 0.28 0.01" 
                     font="monoid">
             </a-text>
 
             <a-text id="hud-status-label" 
-                    value="AIM CONTROLLER & SQUEEZE TRIGGER TO LOCK" 
+                    value="1. STAND AT DOORWAY & CLICK [SET DOOR ORIGIN]" 
                     color="#94a3b8" 
                     align="center" 
                     width="1.3" 
-                    position="0 0.08 0.01" 
+                    position="0 0.14 0.01" 
                     font="monoid">
             </a-text>
 
+            <!-- Zero Origin at Doorframe Button -->
+            <a-plane class="ui-button" id="btn-zero-origin" width="1.1" height="0.12" color="#e11d48" position="0 0.00 0.02" material="shader: flat; depthTest: false;">
+                <a-text id="zero-origin-text" value="[ 1. SET DOORWAY ORIGIN HERE ]" color="#ffffff" width="1.2" align="center" position="0 0 0.01" font="monoid"></a-text>
+            </a-plane>
+
             <!-- Toggle Next Device Button -->
-            <a-plane class="ui-button" id="btn-toggle-device" width="0.52" height="0.14" color="#1e293b" position="-0.32 -0.16 0.02" material="shader: flat; depthTest: false;">
-                <a-text value="[ NEXT DEVICE ]" color="#00f0ff" width="1.2" align="center" position="0 0 0.01" font="monoid"></a-text>
+            <a-plane class="ui-button" id="btn-toggle-device" width="0.52" height="0.14" color="#1e293b" position="-0.32 -0.22 0.02" material="shader: flat; depthTest: false;">
+                <a-text value="[ NEXT NODE ]" color="#00f0ff" width="1.2" align="center" position="0 0 0.01" font="monoid"></a-text>
             </a-plane>
 
             <!-- Save Anchor Button -->
-            <a-plane class="ui-button" id="btn-save-device" width="0.52" height="0.14" color="#334155" position="0.32 -0.16 0.02" material="shader: flat; depthTest: false;">
-                <a-text id="save-btn-text" value="[ CREATE ANCHOR ]" color="#94a3b8" width="1.2" align="center" position="0 0 0.01" font="monoid"></a-text>
+            <a-plane class="ui-button" id="btn-save-device" width="0.52" height="0.14" color="#334155" position="0.32 -0.22 0.02" material="shader: flat; depthTest: false;">
+                <a-text id="save-btn-text" value="[ SAVE ANCHOR ]" color="#94a3b8" width="1.2" align="center" position="0 0 0.01" font="monoid"></a-text>
             </a-plane>
         </a-entity>
 
@@ -186,9 +192,13 @@
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
 
         window.isPosLocked = false;
-        window.latestHitPos = null;
+        window.latestRawHitPos = null;
         window.lockedCoords = null;
         window.isHoveringButton = false;
+
+        // Doorway Origin Reference Frame (Stored in memory)
+        window.originOffset = { x: 0, y: 0, z: 0, yaw: 0 };
+        window.isOriginSet = false;
 
         const devices = [
             { key: 'smart_climate_node', label: 'TARGET: SMART CLIMATE NODE' },
@@ -199,26 +209,81 @@
 
         const deviceLabel = document.getElementById('hud-device-label');
         const statusLabel = document.getElementById('hud-status-label');
+        const zeroOriginBtn = document.getElementById('btn-zero-origin');
+        const zeroOriginText = document.getElementById('zero-origin-text');
         const toggleBtn = document.getElementById('btn-toggle-device');
         const saveBtn = document.getElementById('btn-save-device');
         const saveBtnText = document.getElementById('save-btn-text');
 
-        [toggleBtn, saveBtn].forEach(btn => {
+        [zeroOriginBtn, toggleBtn, saveBtn].forEach(btn => {
             btn.addEventListener('raycaster-intersected', () => { window.isHoveringButton = true; });
             btn.addEventListener('raycaster-intersected-cleared', () => { window.isHoveringButton = false; });
         });
 
+        // 1. Set Doorframe Origin
+        zeroOriginBtn.addEventListener('click', () => {
+            const cameraEl = document.getElementById('main-camera');
+            if (cameraEl) {
+                const camPos = cameraEl.object3D.position;
+                const camRot = cameraEl.object3D.rotation;
+
+                window.originOffset = {
+                    x: camPos.x,
+                    y: camPos.y,
+                    z: camPos.z,
+                    yaw: camRot.y
+                };
+                window.isOriginSet = true;
+
+                zeroOriginBtn.setAttribute('color', '#10b981');
+                zeroOriginText.setAttribute('value', 'DOOR ORIGIN LOCKED!');
+                statusLabel.setAttribute('value', '2. AIM AT HARDWARE & PULL TRIGGER');
+                statusLabel.setAttribute('color', '#39ff14');
+            }
+        });
+
+        // Math Transform: Converts raw Quest World space into Doorway Offset space
+        window.transformToOrigin = function(rawPos) {
+            if (!window.isOriginSet) {
+                return {
+                    x: parseFloat(rawPos.x.toFixed(3)),
+                    y: parseFloat(rawPos.y.toFixed(3)),
+                    z: parseFloat(rawPos.z.toFixed(3))
+                };
+            }
+
+            // Translate
+            const dx = rawPos.x - window.originOffset.x;
+            const dy = rawPos.y - window.originOffset.y;
+            const dz = rawPos.z - window.originOffset.z;
+
+            // Rotate by inverse doorway yaw
+            const cos = Math.cos(-window.originOffset.yaw);
+            const sin = Math.sin(-window.originOffset.yaw);
+
+            const rotatedX = (dx * cos) - (dz * sin);
+            const rotatedZ = (dx * sin) + (dz * cos);
+
+            return {
+                x: parseFloat(rotatedX.toFixed(3)),
+                y: parseFloat(dy.toFixed(3)),
+                z: parseFloat(rotatedZ.toFixed(3))
+            };
+        };
+
+        // 2. Next Device
         toggleBtn.addEventListener('click', () => {
             currentDeviceIndex = (currentDeviceIndex + 1) % devices.length;
             deviceLabel.setAttribute('value', devices[currentDeviceIndex].label);
             resetLock();
         });
 
+        // 3. Save Relative Anchor
         saveBtn.addEventListener('click', async () => {
             if (!window.lockedCoords) return;
 
             const activeKey = devices[currentDeviceIndex].key;
-            statusLabel.setAttribute('value', 'TRANSMITTING COORDS TO RENDER DB...');
+            statusLabel.setAttribute('value', 'SAVING RELATIVE COORDS TO RENDER...');
             statusLabel.setAttribute('color', '#00f0ff');
 
             fetch('/api/spatial/register', {
@@ -246,7 +311,7 @@
             window.lockedCoords = null;
             saveBtn.setAttribute('color', '#334155');
             saveBtnText.setAttribute('color', '#94a3b8');
-            statusLabel.setAttribute('value', 'AIM CONTROLLER & SQUEEZE TRIGGER TO LOCK');
+            statusLabel.setAttribute('value', 'AIM AT HARDWARE & PULL TRIGGER');
             statusLabel.setAttribute('color', '#94a3b8');
         }
 
