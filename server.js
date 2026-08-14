@@ -91,6 +91,11 @@ app.post('/api/spatial/register', (req, res) => {
 // HARDWARE TELEMETRY & CONTROL ROUTES
 // ==============================================================
 
+// 1. Climate Node Telemetry (DHT11 / DHT22 Sensor)
+app.post('/api/telemetry/climate', (req, res) => {
+    const { deviceId, temperature, humidity, status } = req.body;
+
+    const tempVal = temperature !== undefined ? temperature : "--";
     const humVal = humidity !== undefined ? humidity : "--";
     const statusVal = status || (parseFloat(tempVal) > 85 ? "OVERHEATING_WARNING" : "OPTIMAL");
 
