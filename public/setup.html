@@ -7,9 +7,11 @@
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        html, body {
+        html, body, .a-canvas {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; background: #090d16;
+            overflow: hidden;
+            background-color: transparent !important;
+            background: transparent !important;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
         #launch-btn {
@@ -20,11 +22,26 @@
         }
     </style>
 </head>
-<body>
+<body style="margin: 0; overflow: hidden; background: transparent !important;">
 
     <button id="launch-btn">ENTER PASSTHROUGH MAPPER</button>
 
     <script>
+        // Force WebGL Canvas Alpha for Meta Quest AR Passthrough
+        AFRAME.registerComponent('force-ar-passthrough', {
+            init: function () {
+                const scene = this.el;
+                const setTransparent = () => {
+                    if (scene.renderer) {
+                        scene.renderer.setClearColor(0x000000, 0);
+                        scene.renderer.alpha = true;
+                    }
+                };
+                scene.addEventListener('render-target-loaded', setTransparent);
+                scene.addEventListener('enter-vr', setTransparent);
+            }
+        });
+
         AFRAME.registerComponent('qr-datum-tracker', {
             init: function () {
                 this.rightHand = document.getElementById('right-hand');
@@ -34,11 +51,10 @@
                 window.calculatedCoords = { x: 0, y: 0, z: 0 };
                 window.isHoveringUI = false;
 
-                // Controller Trigger to lock target
                 const lockHandler = () => {
                     if (window.isHoveringUI || !window.currentRawHit) return;
 
-                    // If setting QR code origin
+                    // 1. If locking the physical QR Datum
                     if (window.settingQrMode) {
                         this.qrDatumWorldPos = { ...window.currentRawHit };
                         window.settingQrMode = false;
@@ -52,7 +68,7 @@
                         return;
                     }
 
-                    // Standard sensor lock
+                    // 2. Standard Sensor Lock
                     window.isPositionLocked = !window.isPositionLocked;
                     const sphere = document.querySelector('#surface-reticle a-sphere');
                     const txtSave = document.getElementById('txt-save');
@@ -79,6 +95,7 @@
                 const handObj = this.rightHand.object3D;
                 const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(handObj.quaternion);
                 
+                // Project reticle along controller raycast
                 const targetPos = new THREE.Vector3()
                     .copy(handObj.position)
                     .add(dir.multiplyScalar(2.2));
@@ -88,7 +105,7 @@
 
                 window.currentRawHit = { x: targetPos.x, y: targetPos.y, z: targetPos.z };
 
-                // Calculate relative to QR Datum if set
+                // Offsets relative to physical QR sticker
                 const origin = this.qrDatumWorldPos || { x: 0, y: 0, z: 0 };
                 window.calculatedCoords = {
                     x: parseFloat((targetPos.x - origin.x).toFixed(2)),
@@ -104,9 +121,11 @@
         });
     </script>
 
-    <a-scene qr-datum-tracker
-             webxr="optionalFeatures: local-floor;"
-             renderer="alpha: true; antialias: true;"
+    <!-- AR Scene configuration with local-floor and alpha enabled -->
+    <a-scene force-ar-passthrough
+             qr-datum-tracker
+             webxr="referenceSpaceType: local-floor; optionalFeatures: local-floor;"
+             renderer="alpha: true; colorManagement: true; antialias: true;"
              xr-mode-ui="enabled: false">
         
         <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
@@ -116,30 +135,30 @@
 
         <!-- FLOATING CONTROL TERMINAL -->
         <a-entity id="hud-panel" position="0 1.35 -1.2">
-            <a-plane width="1.45" height="0.85" color="#0f172a" opacity="0.95"></a-plane>
+            <a-plane width="1.45" height="0.85" color="#0f172a" opacity="0.92" material="shader: flat; depthTest: false;"></a-plane>
 
             <a-text id="hud-title" value="TARGET: SMART CLIMATE NODE" color="#38bdf8" align="center" width="1.8" position="0 0.30 0.01" font="roboto"></a-text>
             <a-text id="hud-coords" value="1. AIM AT PHYSICAL QR CODE & CLICK PIN" color="#34d399" align="center" width="1.3" position="0 0.16 0.01" font="roboto"></a-text>
 
             <!-- 1. Set QR Code as (0,0,0) -->
-            <a-plane class="ui-btn" id="btn-set-qr" width="1.2" height="0.11" color="#e11d48" position="0 0.02 0.02">
+            <a-plane class="ui-btn" id="btn-set-qr" width="1.2" height="0.11" color="#e11d48" position="0 0.02 0.02" material="shader: flat; depthTest: false;">
                 <a-text id="txt-set-qr" value="[ 1. PIN QR CODE AS (0,0,0) DATUM ]" color="#ffffff" width="1.1" align="center" position="0 0 0.01" font="roboto"></a-text>
             </a-plane>
 
             <!-- Switch & Save -->
-            <a-plane class="ui-btn" id="btn-next" width="0.55" height="0.12" color="#1e293b" position="-0.33 -0.20 0.02">
+            <a-plane class="ui-btn" id="btn-next" width="0.55" height="0.12" color="#1e293b" position="-0.33 -0.20 0.02" material="shader: flat; depthTest: false;">
                 <a-text value="NEXT DEVICE" color="#38bdf8" width="1.1" align="center" position="0 0 0.01" font="roboto"></a-text>
             </a-plane>
-            <a-plane class="ui-btn" id="btn-save" width="0.55" height="0.12" color="#334155" position="0.33 -0.20 0.02">
+            <a-plane class="ui-btn" id="btn-save" width="0.55" height="0.12" color="#334155" position="0.33 -0.20 0.02" material="shader: flat; depthTest: false;">
                 <a-text id="txt-save" value="[ TRIGGER TO LOCK ]" color="#94a3b8" width="1.0" align="center" position="0 0 0.01" font="roboto"></a-text>
             </a-plane>
         </a-entity>
 
         <!-- RETICLE -->
         <a-entity id="surface-reticle" visible="false">
-            <a-ring radius-inner="0.08" radius-outer="0.12" color="#34d399" rotation="-90 0 0"></a-ring>
-            <a-sphere radius="0.04" color="#38bdf8"></a-sphere>
-            <a-box width="0.14" height="0.14" depth="0.14" material="wireframe: true; color: #34d399;" position="0 0.07 0"></a-box>
+            <a-ring radius-inner="0.08" radius-outer="0.12" color="#34d399" rotation="-90 0 0" material="shader: flat; depthTest: false;"></a-ring>
+            <a-sphere radius="0.04" color="#38bdf8" material="shader: flat; depthTest: false;"></a-sphere>
+            <a-box width="0.14" height="0.14" depth="0.14" material="wireframe: true; color: #34d399; shader: flat; depthTest: false;" position="0 0.07 0"></a-box>
         </a-entity>
 
     </a-scene>
@@ -168,7 +187,6 @@
             btn.addEventListener('raycaster-intersected-cleared', () => { window.isHoveringUI = false; });
         });
 
-        // Toggle QR Datum Pin Mode
         btnSetQr.addEventListener('click', () => {
             window.settingQrMode = true;
             btnSetQr.setAttribute('color', '#3b82f6');
@@ -206,10 +224,17 @@
             txtSave.setAttribute('value', '[ TRIGGER TO LOCK ]');
         }
 
+        // Direct immersive-ar invocation for Quest Passthrough
         document.getElementById('launch-btn').addEventListener('click', () => {
             const scene = document.querySelector('a-scene');
-            if (scene.enterVR) scene.enterVR();
-            document.getElementById('launch-btn').style.display = 'none';
+            const button = document.getElementById('launch-btn');
+
+            if (scene.enterAR) {
+                scene.enterAR();
+            } else if (scene.enterVR) {
+                scene.enterVR();
+            }
+            button.style.display = 'none';
         });
     </script>
 </body>
