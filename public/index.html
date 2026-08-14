@@ -12,59 +12,62 @@
             background: transparent !important;
             margin: 0; padding: 0; overflow: hidden;
             width: 100%; height: 100%;
-        }
-        #custom-ar-btn {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            z-index: 99999;
-            padding: 14px 24px;
-            background: #00f0ff;
-            color: #000;
-            border: none;
-            border-radius: 8px;
             font-family: monospace;
-            font-weight: bold;
-            font-size: 16px;
-            cursor: pointer;
-            box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
         }
-        #status-indicator {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 99999;
-            background: rgba(15, 23, 42, 0.85);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            padding: 8px 16px;
-            border-radius: 20px;
-            color: #38bdf8;
-            font-family: monospace;
-            font-size: 13px;
-            pointer-events: none;
+
+        #mobile-hud {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: space-between;
+            box-sizing: border-box; padding: 20px 16px; pointer-events: none; z-index: 10000;
+        }
+
+        .status-pill {
+            align-self: center; background: rgba(13, 17, 23, 0.9);
+            border: 1px solid rgba(0, 240, 255, 0.4); border-radius: 20px;
+            padding: 8px 16px; font-size: 13px; font-weight: bold; color: #00f0ff;
+            pointer-events: auto; backdrop-filter: blur(8px);
+        }
+
+        .btn-bottom-bar { display: flex; gap: 10px; pointer-events: auto; width: 100%; }
+
+        .btn {
+            flex: 1; padding: 15px 12px; border-radius: 12px; font-size: 14px; font-weight: bold;
+            font-family: monospace; cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(13, 17, 23, 0.9); color: #fff; backdrop-filter: blur(8px);
+        }
+
+        #btn-sync { background: #00f0ff; color: #000; border: none; }
+        #btn-enter {
+            position: absolute; bottom: 30px; right: 30px; z-index: 99999;
+            padding: 16px 28px; background: #00f0ff; color: #000; border: none;
+            border-radius: 8px; font-family: monospace; font-weight: bold; font-size: 16px;
         }
     </style>
 </head>
 <body style="margin: 0; overflow: hidden; background: transparent !important;">
 
-    <div id="status-indicator">● LIVE ARDUINO FEED CONNECTED</div>
-    <button id="custom-ar-btn">ENTER AR VIEWER</button>
+    <button id="btn-enter">ENTER AR VIEWER</button>
+
+    <div id="mobile-hud" style="display: none;">
+        <div class="status-pill" id="sync-status">LOOK AT SENSOR TO INSPECT</div>
+        <div class="btn-bottom-bar">
+            <button class="btn" id="btn-sync">[ SYNC TO MARKER (0,0,0) ]</button>
+            <button class="btn" id="btn-power">RELAY: TOGGLE</button>
+        </div>
+    </div>
 
     <script>
         AFRAME.registerComponent('force-ar-passthrough', {
             init: function () {
                 const scene = this.el;
                 const setTransparent = () => {
-                    if (scene.renderer) {
-                        scene.renderer.setClearColor(0x000000, 0);
-                    }
+                    if (scene.renderer) scene.renderer.setClearColor(0x000000, 0);
                 };
                 scene.addEventListener('render-target-loaded', setTransparent);
                 scene.addEventListener('enter-vr', setTransparent);
             }
         });
 
-        // Makes labels/cards rotate to face the user continuously
         AFRAME.registerComponent('billboard', {
             tick: function () {
                 const cam = document.getElementById('main-camera');
@@ -75,37 +78,23 @@
             }
         });
 
-        // Gaze/Glance Detector: Toggles visibility when the center crosshair enters/leaves
-        AFRAME.registerComponent('gaze-reactive', {
+        // Robust Gaze Trigger attached to the solid collider
+        AFRAME.registerComponent('gaze-collider', {
             init: function () {
-                const parent = this.el;
-                const card = parent.querySelector('.info-card');
+                const collider = this.el;
+                const card = collider.parentElement.querySelector('.info-card');
 
-                parent.addEventListener('raycaster-intersected', () => {
+                collider.addEventListener('raycaster-intersected', () => {
                     if (card) {
                         card.setAttribute('visible', 'true');
-                        card.setAttribute('animation__scale', {
-                            property: 'scale',
-                            to: '1 1 1',
-                            dur: 150,
-                            easing: 'easeOutQuad'
-                        });
+                        card.setAttribute('scale', '1 1 1');
                     }
                 });
 
-                parent.addEventListener('raycaster-intersected-cleared', () => {
+                collider.addEventListener('raycaster-intersected-cleared', () => {
                     if (card) {
-                        card.setAttribute('animation__scale', {
-                            property: 'scale',
-                            to: '0.001 0.001 0.001',
-                            dur: 150,
-                            easing: 'easeInQuad'
-                        });
-                        setTimeout(() => {
-                            if (card.getAttribute('scale').x < 0.1) {
-                                card.setAttribute('visible', 'false');
-                            }
-                        }, 160);
+                        card.setAttribute('visible', 'false');
+                        card.setAttribute('scale', '0.001 0.001 0.001');
                     }
                 });
             }
@@ -117,30 +106,33 @@
              renderer="alpha: true; colorManagement: true; antialias: true;"
              xr-mode-ui="enabled: false">
         
-        <!-- Center-Screen Gaze Pointer -->
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
                 <a-entity id="gaze-cursor"
                           cursor="fuse: false;"
-                          raycaster="objects: .gaze-target; far: 10;"
+                          raycaster="objects: .gaze-target; far: 12;"
                           position="0 0 -1"
-                          geometry="primitive: ring; radiusInner: 0.003; radiusOuter: 0.006"
-                          material="color: #00f0ff; shader: flat; opacity: 0.5">
+                          geometry="primitive: ring; radiusInner: 0.004; radiusOuter: 0.008"
+                          material="color: #00f0ff; shader: flat; opacity: 0.7; depthTest: false;">
                 </a-entity>
             </a-entity>
         </a-entity>
 
         <a-entity light="type: ambient; intensity: 1.5;"></a-entity>
 
-        <!-- STATIC WORLD CONTAINER -->
-        <a-entity id="world-space-container" position="0 0 0">
+        <!-- MASTER WORLD CONTAINER -->
+        <a-entity id="datum-container" position="0 0 0">
 
             <!-- 1. CLIMATE NODE -->
-            <a-entity class="gaze-target" id="smart-climate-asset" billboard gaze-reactive position="-0.85 1.5 -2.4">
+            <a-entity id="smart-climate-asset" billboard position="-0.85 1.5 -2.4">
+                <!-- Visual Mesh -->
                 <a-box id="climate-mesh" width="0.16" height="0.16" depth="0.16" material="color: #00f0ff; wireframe: true; opacity: 0.8"></a-box>
                 <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.4" align="center" color="#00f0ff" font="monoid"></a-text>
 
-                <!-- Hidden by default until glanced at -->
+                <!-- Invisible Solid Collision Sphere for Easy Glance Hit-Testing -->
+                <a-sphere class="gaze-target" gaze-collider radius="0.35" material="opacity: 0.0; transparent: true; depthWrite: false;"></a-sphere>
+
+                <!-- Telemetry Card Popup -->
                 <a-entity class="info-card" position="0 0.42 0" visible="false" scale="0.001 0.001 0.001">
                     <a-plane width="0.75" height="0.30" color="#121620" opacity="0.92" material="shader: flat; depthTest: false;"></a-plane>
                     <a-text id="popup-climate-status" value="CLIMATE: OPTIMAL" color="#34d399" width="1.2" position="-0.32 0.07 0.01" font="monoid"></a-text>
@@ -148,12 +140,16 @@
                 </a-entity>
             </a-entity>
 
-            <!-- 2. PERIMETER MONITOR -->
-            <a-entity class="gaze-target" id="perimeter-monitor-asset" billboard gaze-reactive position="1.20 1.8 -3.1">
+            <!-- 2. PERIMETER GUARD -->
+            <a-entity id="perimeter-monitor-asset" billboard position="1.20 1.8 -3.1">
+                <!-- Visual Mesh -->
                 <a-cylinder id="perimeter-mesh" radius="0.10" height="0.18" material="color: #60a5fa; wireframe: true; opacity: 0.8"></a-cylinder>
                 <a-text value="[ PERIMETER GUARD ]" position="0 0.20 0" width="1.4" align="center" color="#60a5fa" font="monoid"></a-text>
 
-                <!-- Hidden by default until glanced at -->
+                <!-- Invisible Solid Collision Sphere -->
+                <a-sphere class="gaze-target" gaze-collider radius="0.35" material="opacity: 0.0; transparent: true; depthWrite: false;"></a-sphere>
+
+                <!-- Telemetry Card Popup -->
                 <a-entity class="info-card" position="0 0.42 0" visible="false" scale="0.001 0.001 0.001">
                     <a-plane width="0.75" height="0.30" color="#121620" opacity="0.92" material="shader: flat; depthTest: false;"></a-plane>
                     <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#34d399" width="1.2" position="-0.32 0.07 0.01" font="monoid"></a-text>
@@ -161,12 +157,16 @@
                 </a-entity>
             </a-entity>
 
-            <!-- 3. SMART POWER RELAY -->
-            <a-entity class="gaze-target" id="smart-relay-asset" billboard gaze-reactive position="1.45 1.0 -1.8">
+            <!-- 3. POWER RELAY -->
+            <a-entity id="smart-relay-asset" billboard position="1.45 1.0 -1.8">
+                <!-- Visual Mesh -->
                 <a-box id="relay-mesh" width="0.15" height="0.15" depth="0.15" material="color: #34d399; wireframe: true; opacity: 0.8"></a-box>
                 <a-text value="[ POWER RELAY ]" position="0 0.18 0" width="1.4" align="center" color="#ffffff" font="monoid"></a-text>
 
-                <!-- Hidden by default until glanced at -->
+                <!-- Invisible Solid Collision Sphere -->
+                <a-sphere class="gaze-target" gaze-collider radius="0.35" material="opacity: 0.0; transparent: true; depthWrite: false;"></a-sphere>
+
+                <!-- Telemetry Card Popup -->
                 <a-entity class="info-card" position="0 0.42 0" visible="false" scale="0.001 0.001 0.001">
                     <a-plane width="0.75" height="0.30" color="#121620" opacity="0.92" material="shader: flat; depthTest: false;"></a-plane>
                     <a-text id="popup-relay-status" value="RELAY: ON" color="#34d399" width="1.2" position="-0.32 0.07 0.01" font="monoid"></a-text>
@@ -182,11 +182,9 @@
         const socket = io({ transports: ['websocket', 'polling'] });
         const sceneEl = document.querySelector('a-scene');
 
-        // Apply registered database coordinates
         function applyRegisteredAnchors(map) {
             if (!map) return;
             const dataMap = map.anchors || map;
-
             const targets = [
                 { key: 'smart_climate_node', elementId: 'smart-climate-asset' },
                 { key: 'perimeter_monitor', elementId: 'perimeter-monitor-asset' },
@@ -209,7 +207,35 @@
 
         socket.on('spatialAnchorsUpdated', (map) => applyRegisteredAnchors(map));
 
-        // 1. CLIMATE NODE LIVE INGEST
+        // Sync Container to Phone's Current Marker Pose
+        function syncToPhysicalMarker() {
+            const cam = document.getElementById('main-camera');
+            const container = document.getElementById('datum-container');
+            const status = document.getElementById('sync-status');
+
+            if (cam && container) {
+                container.object3D.position.set(cam.object3D.position.x, cam.object3D.position.y, cam.object3D.position.z);
+                const camRotY = cam.object3D.rotation.y;
+                container.object3D.rotation.y = camRotY;
+
+                if (status) {
+                    status.innerText = "DATUM LOCKED (0,0,0) ● SYNCED";
+                    status.style.color = "#39ff14";
+                }
+            }
+        }
+
+        document.getElementById('btn-sync').addEventListener('click', (e) => {
+            e.stopPropagation();
+            syncToPhysicalMarker();
+        });
+
+        document.getElementById('btn-power').addEventListener('click', (e) => {
+            e.stopPropagation();
+            fetch('/api/hardware/relay/toggle', { method: 'POST' });
+        });
+
+        // Telemetry Listeners
         socket.on('climateStateUpdate', (data) => {
             const tempText = document.getElementById('popup-climate-temp');
             const statusText = document.getElementById('popup-climate-status');
@@ -228,7 +254,6 @@
             }
         });
 
-        // 2. PERIMETER & RELAY LIVE INGEST
         socket.on('twinStateUpdate', (state) => {
             if (state.perimeter_monitor) {
                 const pStatus = document.getElementById('popup-perimeter-status');
@@ -273,14 +298,11 @@
             }
         });
 
-        // Launch AR
-        document.getElementById('custom-ar-btn').addEventListener('click', () => {
-            const btn = document.getElementById('custom-ar-btn');
-            if (sceneEl.enterAR) {
-                sceneEl.enterAR();
-            } else {
-                sceneEl.enterVR();
-            }
+        document.getElementById('btn-enter').addEventListener('click', () => {
+            const btn = document.getElementById('btn-enter');
+            document.getElementById('mobile-hud').style.display = 'flex';
+            if (sceneEl.enterAR) sceneEl.enterAR();
+            else sceneEl.enterVR();
             btn.style.display = 'none';
         });
     </script>
