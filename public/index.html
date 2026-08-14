@@ -13,22 +13,23 @@
         :root {
             --bg-glass: rgba(18, 20, 24, 0.85);
             --border-glass: rgba(255, 255, 255, 0.12);
-            --accent: #2563eb;
-            --accent-glow: #3b82f6;
             --success: #10b981;
             --danger: #ef4444;
             --text-primary: #f8fafc;
             --text-muted: #94a3b8;
         }
 
-        html, body, .a-canvas {
+        html, body {
             margin: 0; padding: 0; width: 100%; height: 100%;
             overflow: hidden;
             background-color: transparent !important;
-            background: transparent !important;
             touch-action: none; user-select: none;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             color: var(--text-primary);
+        }
+
+        .a-canvas {
+            background-color: transparent !important;
         }
 
         /* 1. CLEAN SCANNER SCREEN */
@@ -55,7 +56,6 @@
             color: var(--text-muted); font-size: 14px; margin: 0;
         }
 
-        /* Minimal Corner-Bracket Viewfinder */
         .scanner-frame-box {
             position: relative;
             width: 260px; height: 260px;
@@ -75,7 +75,6 @@
             position: absolute;
             width: 180px; height: 180px;
             pointer-events: none;
-            border: 2px solid transparent;
             box-sizing: border-box;
         }
         
@@ -173,9 +172,9 @@
         }
     </style>
 </head>
-<body style="margin: 0; overflow: hidden; background-color: transparent !important;">
+<body>
 
-    <!-- 1. MINIMAL SCANNER MODAL -->
+    <!-- 1. PRE-AR SCANNER MODAL -->
     <div id="door-scan-screen">
         <div class="scan-header">
             <h1>Noemata Vision</h1>
@@ -188,7 +187,7 @@
         </div>
 
         <div class="scan-footer">
-            <div id="scan-status">Searching for origin datum...</div>
+            <div id="scan-status">Searching for origin code...</div>
             <button class="btn-primary" id="btn-enter-ar" style="display: none;">Enter Workspace AR</button>
             <button class="btn-secondary" id="btn-manual-launch">Skip calibration</button>
         </div>
@@ -208,7 +207,7 @@
     </div>
 
     <script>
-        // Force WebGL Canvas Transparency for AR Passthrough
+        // Force Canvas Alpha Transparency for AR Passthrough
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -250,13 +249,13 @@
         });
     </script>
 
-    <!-- Native A-Frame Scene with Minimalist 3D HUD Cards -->
+    <!-- Native A-Frame Scene -->
     <a-scene force-passthrough
-             webxr="requiredFeatures: local-floor; optionalFeatures: dom-overlay; overlayElement: #mobile-ar-overlay; referenceSpaceType: local-floor;"
+             webxr="referenceSpaceType: local-floor;"
              renderer="alpha: true; colorManagement: true; antialias: true;"
              xr-mode-ui="enabled: false">
 
-        <!-- Camera Rig & Subtle Dot Pointer -->
+        <!-- Camera Rig & Subtle Pointer -->
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
                 <a-entity cursor="fuse: false;"
@@ -367,7 +366,7 @@
             const ctx = canvas.getContext('2d');
 
             scanInterval = setInterval(() => {
-                if (videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
+                if (videoEl && videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
                     canvas.width = videoEl.videoWidth;
                     canvas.height = videoEl.videoHeight;
                     ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
@@ -390,23 +389,31 @@
                 cameraStream.getTracks().forEach(t => t.stop());
                 cameraStream = null;
             }
-            if (videoEl.srcObject) {
+            if (videoEl) {
                 videoEl.srcObject = null;
             }
         }
 
+        // Clean AR Transition Trigger
         function triggerEnterAR() {
             stopPreArCamera();
+
+            // Hide scanner and show AR HUD
             doorScanScreen.style.display = 'none';
             arOverlay.style.display = 'flex';
 
             const sceneEl = document.querySelector('a-scene');
-            if (sceneEl.enterAR) {
-                sceneEl.enterAR();
-            } else if (sceneEl.enterVR) {
-                sceneEl.enterVR();
-            }
 
+            // Allow the hardware camera driver 50ms to release before WebXR claims it
+            setTimeout(() => {
+                if (sceneEl.enterAR) {
+                    sceneEl.enterAR();
+                } else if (sceneEl.enterVR) {
+                    sceneEl.enterVR();
+                }
+            }, 50);
+
+            // Re-center world anchor
             setTimeout(() => {
                 const cameraEl = document.getElementById('main-camera');
                 const spatialAnchor = document.getElementById('noemata-spatial-anchor');
@@ -416,7 +423,7 @@
                     spatialAnchor.object3D.position.set(camPos.x, 0, camPos.z);
                     spatialAnchor.object3D.rotation.set(0, camRot.y, 0);
                 }
-            }, 300);
+            }, 350);
         }
 
         enterArBtn.addEventListener('click', triggerEnterAR);
