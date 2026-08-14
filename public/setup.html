@@ -40,33 +40,24 @@
             }
         });
 
-        // 6DoF Laser Beam with Long-Distance Projection
+        // 6DoF Laser Extender with Bulletproof Toggle Lock
         AFRAME.registerComponent('laser-reach-mapper', {
             init: function () {
                 this.rightHand = document.getElementById('right-hand');
                 this.reticle = document.getElementById('laser-target');
-                this.currentDistance = 2.5; // Starts 2.5m projected out
+                this.currentDistance = 2.5;
                 this.heightOffset = 0.0;
                 this.originFloorPos = { x: 0, z: 0 };
-                this.isOriginSet = false;
-
-                // Listen for thumbstick up/down for depth adjustment
-                window.addEventListener('thumbstickmoved', (e) => {
-                    if (Math.abs(e.detail.y) > 0.2) {
-                        this.currentDistance -= e.detail.y * 0.08;
-                        this.currentDistance = Math.max(0.4, Math.min(8.0, this.currentDistance));
-                    }
-                });
+                window.isPositionLocked = false;
             },
 
             tick: function () {
-                if (!this.rightHand || window.isLocked) return;
+                if (!this.rightHand || window.isPositionLocked) return;
 
                 const handObj = this.rightHand.object3D;
-                // Get raycast forward vector from controller tip
+                // Forward vector from controller tip
                 const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(handObj.quaternion);
                 
-                // Project reticle out into 3D space
                 const targetWorldPos = new THREE.Vector3()
                     .copy(handObj.position)
                     .add(forward.multiplyScalar(this.currentDistance));
@@ -74,10 +65,9 @@
                 targetWorldPos.y += this.heightOffset;
                 this.reticle.object3D.position.copy(targetWorldPos);
 
-                // Compute relative coordinates from doorway floor origin
                 window.calculatedCoords = {
                     x: parseFloat((targetWorldPos.x - this.originFloorPos.x).toFixed(2)),
-                    y: parseFloat(targetWorldPos.y.toFixed(2)), // Direct true floor elevation
+                    y: parseFloat(targetWorldPos.y.toFixed(2)),
                     z: parseFloat((targetWorldPos.z - this.originFloorPos.z).toFixed(2))
                 };
 
@@ -85,6 +75,39 @@
                 if (readout) {
                     readout.setAttribute('value', `X: ${window.calculatedCoords.x}m | Y: ${window.calculatedCoords.y}m | Z: ${window.calculatedCoords.z}m`);
                 }
+            }
+        });
+
+        // Global function to toggle target position lock
+        window.toggleTargetLock = function() {
+            window.isPositionLocked = !window.isPositionLocked;
+            const btnLock = document.getElementById('btn-lock');
+            const txtLock = document.getElementById('txt-lock');
+            const reticleSphere = document.querySelector('#laser-target a-sphere');
+
+            if (window.isPositionLocked) {
+                if (btnLock) btnLock.setAttribute('color', '#ef4444');
+                if (txtLock) txtLock.setAttribute('value', '[ LOCKED - CLICK TO UNLOCK ]');
+                if (reticleSphere) reticleSphere.setAttribute('color', '#ef4444');
+            } else {
+                if (btnLock) btnLock.setAttribute('color', '#3b82f6');
+                if (txtLock) txtLock.setAttribute('value', '[ LOCK TARGET IN AIR ]');
+                if (reticleSphere) reticleSphere.setAttribute('color', '#38bdf8');
+            }
+        };
+
+        // Listen for hardware Quest Controller trigger/grip/A buttons
+        AFRAME.registerComponent('controller-lock-listener', {
+            init: function () {
+                const handler = () => {
+                    if (!window.isHoveringUI) {
+                        window.toggleTargetLock();
+                    }
+                };
+                this.el.addEventListener('triggerdown', handler);
+                this.el.addEventListener('gripdown', handler);
+                this.el.addEventListener('abuttondown', handler);
+                this.el.addEventListener('xbuttondown', handler);
             }
         });
     </script>
@@ -97,57 +120,63 @@
         
         <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
         
-        <a-entity id="left-hand" laser-controls="hand: left" raycaster="objects: .ui-btn; far: 6;"></a-entity>
-        <a-entity id="right-hand" laser-controls="hand: right" raycaster="objects: .ui-btn; far: 6;"></a-entity>
+        <!-- Laser Controllers with Hardware Click Handlers -->
+        <a-entity id="left-hand" laser-controls="hand: left" controller-lock-listener raycaster="objects: .ui-btn; far: 8;"></a-entity>
+        <a-entity id="right-hand" laser-controls="hand: right" controller-lock-listener raycaster="objects: .ui-btn; far: 8;"></a-entity>
 
-        <!-- FLOATING CONTROL HUD -->
+        <!-- FLOATING CONTROL TERMINAL -->
         <a-entity id="hud-panel" position="0 1.35 -1.2">
-            <a-plane width="1.45" height="0.9" color="#0f172a" opacity="0.95"></a-plane>
+            <a-plane width="1.45" height="0.92" color="#0f172a" opacity="0.95"></a-plane>
 
-            <a-text id="hud-title" value="TARGET: SMART CLIMATE NODE" color="#38bdf8" align="center" width="1.8" position="0 0.32 0.01" font="roboto"></a-text>
-            <a-text id="hud-coords" value="X: 0.00m | Y: 2.10m | Z: -2.40m" color="#34d399" align="center" width="1.4" position="0 0.18 0.01" font="roboto"></a-text>
+            <a-text id="hud-title" value="TARGET: SMART CLIMATE NODE" color="#38bdf8" align="center" width="1.8" position="0 0.34 0.01" font="roboto"></a-text>
+            <a-text id="hud-coords" value="X: 0.00m | Y: 2.10m | Z: -2.40m" color="#34d399" align="center" width="1.4" position="0 0.20 0.01" font="roboto"></a-text>
 
-            <!-- 1. Origin Calibrate -->
-            <a-plane class="ui-btn" id="btn-origin" width="1.2" height="0.11" color="#e11d48" position="0 0.04 0.02">
-                <a-text id="txt-origin" value="[ 1. STAND AT DOOR & SET FLOOR ORIGIN ]" color="#ffffff" width="1.2" align="center" position="0 0 0.01" font="roboto"></a-text>
-            </a-plane>
-
-            <!-- Distance adjustment buttons for high sensors -->
-            <a-plane class="ui-btn" id="btn-dist-near" width="0.28" height="0.10" color="#334155" position="-0.42 -0.10 0.02">
-                <a-text value="PULL IN (-)" color="#fff" width="0.9" align="center" position="0 0 0.01" font="roboto"></a-text>
-            </a-plane>
-            <a-plane class="ui-btn" id="btn-dist-far" width="0.28" height="0.10" color="#334155" position="-0.14 -0.10 0.02">
-                <a-text value="PUSH OUT (+)" color="#fff" width="0.9" align="center" position="0 0 0.01" font="roboto"></a-text>
-            </a-plane>
-            <a-plane class="ui-btn" id="btn-h-up" width="0.28" height="0.10" color="#334155" position="0.14 -0.10 0.02">
-                <a-text value="HEIGHT (+)" color="#fff" width="0.9" align="center" position="0 0 0.01" font="roboto"></a-text>
-            </a-plane>
-            <a-plane class="ui-btn" id="btn-h-down" width="0.28" height="0.10" color="#334155" position="0.42 -0.10 0.02">
-                <a-text value="HEIGHT (-)" color="#fff" width="0.9" align="center" position="0 0 0.01" font="roboto"></a-text>
+            <!-- 1. Origin Set Button -->
+            <a-plane class="ui-btn" id="btn-origin" width="1.2" height="0.10" color="#e11d48" position="0 0.08 0.02">
+                <a-text id="txt-origin" value="[ 1. STAND AT DOOR & SET ORIGIN ]" color="#ffffff" width="1.1" align="center" position="0 0 0.01" font="roboto"></a-text>
             </a-plane>
 
-            <!-- Action Buttons -->
-            <a-plane class="ui-btn" id="btn-next" width="0.55" height="0.12" color="#1e293b" position="-0.33 -0.26 0.02">
-                <a-text value="NEXT DEVICE" color="#38bdf8" width="1.2" align="center" position="0 0 0.01" font="roboto"></a-text>
+            <!-- 2. Explicit Click-to-Lock Button (Always Works via Laser) -->
+            <a-plane class="ui-btn" id="btn-lock" width="1.2" height="0.10" color="#3b82f6" position="0 -0.04 0.02">
+                <a-text id="txt-lock" value="[ 2. LOCK TARGET IN AIR ]" color="#ffffff" width="1.1" align="center" position="0 0 0.01" font="roboto"></a-text>
             </a-plane>
-            <a-plane class="ui-btn" id="btn-save" width="0.55" height="0.12" color="#2563eb" position="0.33 -0.26 0.02">
-                <a-text id="txt-save" value="SAVE PIN" color="#ffffff" width="1.2" align="center" position="0 0 0.01" font="roboto"></a-text>
+
+            <!-- Height / Distance Nudge Controls -->
+            <a-plane class="ui-btn" id="btn-dist-near" width="0.28" height="0.08" color="#334155" position="-0.42 -0.16 0.02">
+                <a-text value="PULL IN (-)" color="#fff" width="0.8" align="center" position="0 0 0.01" font="roboto"></a-text>
+            </a-plane>
+            <a-plane class="ui-btn" id="btn-dist-far" width="0.28" height="0.08" color="#334155" position="-0.14 -0.16 0.02">
+                <a-text value="PUSH OUT (+)" color="#fff" width="0.8" align="center" position="0 0 0.01" font="roboto"></a-text>
+            </a-plane>
+            <a-plane class="ui-btn" id="btn-h-up" width="0.28" height="0.08" color="#334155" position="0.14 -0.16 0.02">
+                <a-text value="HEIGHT (+)" color="#fff" width="0.8" align="center" position="0 0 0.01" font="roboto"></a-text>
+            </a-plane>
+            <a-plane class="ui-btn" id="btn-h-down" width="0.28" height="0.08" color="#334155" position="0.42 -0.16 0.02">
+                <a-text value="HEIGHT (-)" color="#fff" width="0.8" align="center" position="0 0 0.01" font="roboto"></a-text>
+            </a-plane>
+
+            <!-- Device Switch & Save -->
+            <a-plane class="ui-btn" id="btn-next" width="0.55" height="0.11" color="#1e293b" position="-0.33 -0.30 0.02">
+                <a-text value="NEXT DEVICE" color="#38bdf8" width="1.1" align="center" position="0 0 0.01" font="roboto"></a-text>
+            </a-plane>
+            <a-plane class="ui-btn" id="btn-save" width="0.55" height="0.11" color="#10b981" position="0.33 -0.30 0.02">
+                <a-text id="txt-save" value="SAVE PIN" color="#ffffff" width="1.1" align="center" position="0 0 0.01" font="roboto"></a-text>
             </a-plane>
         </a-entity>
 
-        <!-- HIGH-VISIBILITY 3D TARGET RETICLE -->
-        <a-entity id="laser-target" position="0 2 -2">
-            <a-sphere radius="0.04" color="#38bdf8" material="shader: flat;"></a-sphere>
-            <a-ring radius-inner="0.08" radius-outer="0.10" color="#34d399" material="shader: flat;"></a-ring>
-            <a-box width="0.14" height="0.14" depth="0.14" material="wireframe: true; color: #38bdf8;"></a-box>
+        <!-- 3D AIMING RETICLE -->
+        <a-entity id="laser-target" position="0 2 -2.5">
+            <a-sphere radius="0.05" color="#38bdf8" material="shader: flat; opacity: 0.9;"></a-sphere>
+            <a-ring radius-inner="0.08" radius-outer="0.11" color="#34d399" material="shader: flat;"></a-ring>
+            <a-box width="0.15" height="0.15" depth="0.15" material="wireframe: true; color: #38bdf8;"></a-box>
         </a-entity>
 
     </a-scene>
 
     <script>
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
-        window.isLocked = false;
-        window.calculatedCoords = { x: 0, y: 2, z: -2 };
+        window.calculatedCoords = { x: 0, y: 2, z: -2.5 };
+        window.isHoveringUI = false;
 
         const devices = [
             { key: 'smart_climate_node', label: 'TARGET: SMART CLIMATE NODE' },
@@ -159,38 +188,51 @@
         const hudTitle = document.getElementById('hud-title');
         const btnOrigin = document.getElementById('btn-origin');
         const txtOrigin = document.getElementById('txt-origin');
+        const btnLock = document.getElementById('btn-lock');
         const btnNext = document.getElementById('btn-next');
         const btnSave = document.getElementById('btn-save');
         const txtSave = document.getElementById('txt-save');
 
         const mapper = () => document.querySelector('a-scene').components['laser-reach-mapper'];
 
-        // 1. Set Floor Origin at Door
+        // Track UI raycaster hovers so clicks on buttons don't misfire world-lock
+        document.querySelectorAll('.ui-btn').forEach(btn => {
+            btn.addEventListener('raycaster-intersected', () => { window.isHoveringUI = true; });
+            btn.addEventListener('raycaster-intersected-cleared', () => { window.isHoveringUI = false; });
+        });
+
+        // 1. Set Door Origin
         btnOrigin.addEventListener('click', () => {
             const cam = document.getElementById('main-camera');
             const m = mapper();
             if (cam && m) {
                 m.originFloorPos = { x: cam.object3D.position.x, z: cam.object3D.position.z };
                 btnOrigin.setAttribute('color', '#10b981');
-                txtOrigin.setAttribute('value', 'DOOR ORIGIN LOCKED');
+                txtOrigin.setAttribute('value', 'ORIGIN SET AT DOOR');
             }
         });
 
-        // Nudge Controls for High Sensors
+        // 2. Lock / Unlock Position via Laser Click
+        btnLock.addEventListener('click', () => {
+            window.toggleTargetLock();
+        });
+
+        // Nudge controls
         document.getElementById('btn-dist-near').addEventListener('click', () => { if (mapper()) mapper().currentDistance -= 0.3; });
         document.getElementById('btn-dist-far').addEventListener('click', () => { if (mapper()) mapper().currentDistance += 0.3; });
         document.getElementById('btn-h-up').addEventListener('click', () => { if (mapper()) mapper().heightOffset += 0.2; });
         document.getElementById('btn-h-down').addEventListener('click', () => { if (mapper()) mapper().heightOffset -= 0.2; });
 
-        // Next
+        // Next Device
         btnNext.addEventListener('click', () => {
             currentIdx = (currentIdx + 1) % devices.length;
             hudTitle.setAttribute('value', devices[currentIdx].label);
             txtSave.setAttribute('value', 'SAVE PIN');
-            btnSave.setAttribute('color', '#2563eb');
+            btnSave.setAttribute('color', '#10b981');
+            if (window.isPositionLocked) window.toggleTargetLock(); // unlock for next device
         });
 
-        // Save
+        // Save Pin
         btnSave.addEventListener('click', () => {
             const activeKey = devices[currentIdx].key;
             fetch('/api/spatial/register', {
@@ -201,7 +243,263 @@
             .then(res => res.json())
             .then(() => {
                 txtSave.setAttribute('value', 'PIN SAVED!');
-                btnSave.setAttribute('color', '#10b981');
+                btnSave.setAttribute('color', '#3b82f6');
+            });
+        });
+
+        document.getElementById('btn-enter').addEventListener('click', () => {
+            const scene = document.querySelector('a-scene');
+            if (scene.enterAR) scene.enterAR(); else scene.enterVR();
+            document.getElementById('btn-enter').style.display = 'none';
+        });
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noemata // Quest Laser Mapper</title>
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        html, body, .a-canvas {
+            background-color: transparent !important;
+            margin: 0; padding: 0; overflow: hidden;
+            width: 100%; height: 100%;
+        }
+        #btn-enter {
+            position: absolute; bottom: 30px; right: 30px; z-index: 99999;
+            padding: 18px 36px; background: #2563eb; color: #fff;
+            border: none; border-radius: 12px; font-family: -apple-system, sans-serif;
+            font-weight: 700; font-size: 16px; cursor: pointer;
+            box-shadow: 0 4px 20px rgba(37, 99, 235, 0.5);
+        }
+    </style>
+</head>
+<body style="margin: 0; overflow: hidden; background: transparent !important;">
+
+    <button id="btn-enter">ENTER QUEST CALIBRATOR</button>
+
+    <script>
+        AFRAME.registerComponent('force-passthrough', {
+            init: function () {
+                const scene = this.el;
+                const setTransparent = () => {
+                    if (scene.renderer) {
+                        scene.renderer.setClearColor(0x000000, 0);
+                        scene.renderer.alpha = true;
+                    }
+                };
+                scene.addEventListener('render-target-loaded', setTransparent);
+                scene.addEventListener('enter-vr', setTransparent);
+            }
+        });
+
+        // 6DoF Laser Extender with Bulletproof Toggle Lock
+        AFRAME.registerComponent('laser-reach-mapper', {
+            init: function () {
+                this.rightHand = document.getElementById('right-hand');
+                this.reticle = document.getElementById('laser-target');
+                this.currentDistance = 2.5;
+                this.heightOffset = 0.0;
+                this.originFloorPos = { x: 0, z: 0 };
+                window.isPositionLocked = false;
+            },
+
+            tick: function () {
+                if (!this.rightHand || window.isPositionLocked) return;
+
+                const handObj = this.rightHand.object3D;
+                // Forward vector from controller tip
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(handObj.quaternion);
+                
+                const targetWorldPos = new THREE.Vector3()
+                    .copy(handObj.position)
+                    .add(forward.multiplyScalar(this.currentDistance));
+
+                targetWorldPos.y += this.heightOffset;
+                this.reticle.object3D.position.copy(targetWorldPos);
+
+                window.calculatedCoords = {
+                    x: parseFloat((targetWorldPos.x - this.originFloorPos.x).toFixed(2)),
+                    y: parseFloat(targetWorldPos.y.toFixed(2)),
+                    z: parseFloat((targetWorldPos.z - this.originFloorPos.z).toFixed(2))
+                };
+
+                const readout = document.getElementById('hud-coords');
+                if (readout) {
+                    readout.setAttribute('value', `X: ${window.calculatedCoords.x}m | Y: ${window.calculatedCoords.y}m | Z: ${window.calculatedCoords.z}m`);
+                }
+            }
+        });
+
+        // Global function to toggle target position lock
+        window.toggleTargetLock = function() {
+            window.isPositionLocked = !window.isPositionLocked;
+            const btnLock = document.getElementById('btn-lock');
+            const txtLock = document.getElementById('txt-lock');
+            const reticleSphere = document.querySelector('#laser-target a-sphere');
+
+            if (window.isPositionLocked) {
+                if (btnLock) btnLock.setAttribute('color', '#ef4444');
+                if (txtLock) txtLock.setAttribute('value', '[ LOCKED - CLICK TO UNLOCK ]');
+                if (reticleSphere) reticleSphere.setAttribute('color', '#ef4444');
+            } else {
+                if (btnLock) btnLock.setAttribute('color', '#3b82f6');
+                if (txtLock) txtLock.setAttribute('value', '[ LOCK TARGET IN AIR ]');
+                if (reticleSphere) reticleSphere.setAttribute('color', '#38bdf8');
+            }
+        };
+
+        // Listen for hardware Quest Controller trigger/grip/A buttons
+        AFRAME.registerComponent('controller-lock-listener', {
+            init: function () {
+                const handler = () => {
+                    if (!window.isHoveringUI) {
+                        window.toggleTargetLock();
+                    }
+                };
+                this.el.addEventListener('triggerdown', handler);
+                this.el.addEventListener('gripdown', handler);
+                this.el.addEventListener('abuttondown', handler);
+                this.el.addEventListener('xbuttondown', handler);
+            }
+        });
+    </script>
+
+    <a-scene force-passthrough
+             laser-reach-mapper
+             webxr="referenceSpaceType: local-floor;"
+             renderer="alpha: true; antialias: true;"
+             xr-mode-ui="enabled: false">
+        
+        <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
+        
+        <!-- Laser Controllers with Hardware Click Handlers -->
+        <a-entity id="left-hand" laser-controls="hand: left" controller-lock-listener raycaster="objects: .ui-btn; far: 8;"></a-entity>
+        <a-entity id="right-hand" laser-controls="hand: right" controller-lock-listener raycaster="objects: .ui-btn; far: 8;"></a-entity>
+
+        <!-- FLOATING CONTROL TERMINAL -->
+        <a-entity id="hud-panel" position="0 1.35 -1.2">
+            <a-plane width="1.45" height="0.92" color="#0f172a" opacity="0.95"></a-plane>
+
+            <a-text id="hud-title" value="TARGET: SMART CLIMATE NODE" color="#38bdf8" align="center" width="1.8" position="0 0.34 0.01" font="roboto"></a-text>
+            <a-text id="hud-coords" value="X: 0.00m | Y: 2.10m | Z: -2.40m" color="#34d399" align="center" width="1.4" position="0 0.20 0.01" font="roboto"></a-text>
+
+            <!-- 1. Origin Set Button -->
+            <a-plane class="ui-btn" id="btn-origin" width="1.2" height="0.10" color="#e11d48" position="0 0.08 0.02">
+                <a-text id="txt-origin" value="[ 1. STAND AT DOOR & SET ORIGIN ]" color="#ffffff" width="1.1" align="center" position="0 0 0.01" font="roboto"></a-text>
+            </a-plane>
+
+            <!-- 2. Explicit Click-to-Lock Button (Always Works via Laser) -->
+            <a-plane class="ui-btn" id="btn-lock" width="1.2" height="0.10" color="#3b82f6" position="0 -0.04 0.02">
+                <a-text id="txt-lock" value="[ 2. LOCK TARGET IN AIR ]" color="#ffffff" width="1.1" align="center" position="0 0 0.01" font="roboto"></a-text>
+            </a-plane>
+
+            <!-- Height / Distance Nudge Controls -->
+            <a-plane class="ui-btn" id="btn-dist-near" width="0.28" height="0.08" color="#334155" position="-0.42 -0.16 0.02">
+                <a-text value="PULL IN (-)" color="#fff" width="0.8" align="center" position="0 0 0.01" font="roboto"></a-text>
+            </a-plane>
+            <a-plane class="ui-btn" id="btn-dist-far" width="0.28" height="0.08" color="#334155" position="-0.14 -0.16 0.02">
+                <a-text value="PUSH OUT (+)" color="#fff" width="0.8" align="center" position="0 0 0.01" font="roboto"></a-text>
+            </a-plane>
+            <a-plane class="ui-btn" id="btn-h-up" width="0.28" height="0.08" color="#334155" position="0.14 -0.16 0.02">
+                <a-text value="HEIGHT (+)" color="#fff" width="0.8" align="center" position="0 0 0.01" font="roboto"></a-text>
+            </a-plane>
+            <a-plane class="ui-btn" id="btn-h-down" width="0.28" height="0.08" color="#334155" position="0.42 -0.16 0.02">
+                <a-text value="HEIGHT (-)" color="#fff" width="0.8" align="center" position="0 0 0.01" font="roboto"></a-text>
+            </a-plane>
+
+            <!-- Device Switch & Save -->
+            <a-plane class="ui-btn" id="btn-next" width="0.55" height="0.11" color="#1e293b" position="-0.33 -0.30 0.02">
+                <a-text value="NEXT DEVICE" color="#38bdf8" width="1.1" align="center" position="0 0 0.01" font="roboto"></a-text>
+            </a-plane>
+            <a-plane class="ui-btn" id="btn-save" width="0.55" height="0.11" color="#10b981" position="0.33 -0.30 0.02">
+                <a-text id="txt-save" value="SAVE PIN" color="#ffffff" width="1.1" align="center" position="0 0 0.01" font="roboto"></a-text>
+            </a-plane>
+        </a-entity>
+
+        <!-- 3D AIMING RETICLE -->
+        <a-entity id="laser-target" position="0 2 -2.5">
+            <a-sphere radius="0.05" color="#38bdf8" material="shader: flat; opacity: 0.9;"></a-sphere>
+            <a-ring radius-inner="0.08" radius-outer="0.11" color="#34d399" material="shader: flat;"></a-ring>
+            <a-box width="0.15" height="0.15" depth="0.15" material="wireframe: true; color: #38bdf8;"></a-box>
+        </a-entity>
+
+    </a-scene>
+
+    <script>
+        const socket = io({ transports: ['websocket', 'polling'], secure: true });
+        window.calculatedCoords = { x: 0, y: 2, z: -2.5 };
+        window.isHoveringUI = false;
+
+        const devices = [
+            { key: 'smart_climate_node', label: 'TARGET: SMART CLIMATE NODE' },
+            { key: 'perimeter_monitor', label: 'TARGET: PERIMETER MONITOR' },
+            { key: 'smart_power_relay', label: 'TARGET: SMART POWER RELAY' }
+        ];
+        let currentIdx = 0;
+
+        const hudTitle = document.getElementById('hud-title');
+        const btnOrigin = document.getElementById('btn-origin');
+        const txtOrigin = document.getElementById('txt-origin');
+        const btnLock = document.getElementById('btn-lock');
+        const btnNext = document.getElementById('btn-next');
+        const btnSave = document.getElementById('btn-save');
+        const txtSave = document.getElementById('txt-save');
+
+        const mapper = () => document.querySelector('a-scene').components['laser-reach-mapper'];
+
+        // Track UI raycaster hovers so clicks on buttons don't misfire world-lock
+        document.querySelectorAll('.ui-btn').forEach(btn => {
+            btn.addEventListener('raycaster-intersected', () => { window.isHoveringUI = true; });
+            btn.addEventListener('raycaster-intersected-cleared', () => { window.isHoveringUI = false; });
+        });
+
+        // 1. Set Door Origin
+        btnOrigin.addEventListener('click', () => {
+            const cam = document.getElementById('main-camera');
+            const m = mapper();
+            if (cam && m) {
+                m.originFloorPos = { x: cam.object3D.position.x, z: cam.object3D.position.z };
+                btnOrigin.setAttribute('color', '#10b981');
+                txtOrigin.setAttribute('value', 'ORIGIN SET AT DOOR');
+            }
+        });
+
+        // 2. Lock / Unlock Position via Laser Click
+        btnLock.addEventListener('click', () => {
+            window.toggleTargetLock();
+        });
+
+        // Nudge controls
+        document.getElementById('btn-dist-near').addEventListener('click', () => { if (mapper()) mapper().currentDistance -= 0.3; });
+        document.getElementById('btn-dist-far').addEventListener('click', () => { if (mapper()) mapper().currentDistance += 0.3; });
+        document.getElementById('btn-h-up').addEventListener('click', () => { if (mapper()) mapper().heightOffset += 0.2; });
+        document.getElementById('btn-h-down').addEventListener('click', () => { if (mapper()) mapper().heightOffset -= 0.2; });
+
+        // Next Device
+        btnNext.addEventListener('click', () => {
+            currentIdx = (currentIdx + 1) % devices.length;
+            hudTitle.setAttribute('value', devices[currentIdx].label);
+            txtSave.setAttribute('value', 'SAVE PIN');
+            btnSave.setAttribute('color', '#10b981');
+            if (window.isPositionLocked) window.toggleTargetLock(); // unlock for next device
+        });
+
+        // Save Pin
+        btnSave.addEventListener('click', () => {
+            const activeKey = devices[currentIdx].key;
+            fetch('/api/spatial/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceId: activeKey, position: window.calculatedCoords })
+            })
+            .then(res => res.json())
+            .then(() => {
+                txtSave.setAttribute('value', 'PIN SAVED!');
+                btnSave.setAttribute('color', '#3b82f6');
             });
         });
 
