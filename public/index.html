@@ -207,7 +207,6 @@
     </div>
 
     <script>
-        // Force Canvas Alpha Transparency for AR Passthrough
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -222,7 +221,6 @@
             }
         });
 
-        // Smooth Billboard Component
         AFRAME.registerComponent('billboard', {
             tick: function () {
                 const cam = document.getElementById('main-camera');
@@ -234,7 +232,6 @@
             }
         });
 
-        // Hover Raycaster Component
         AFRAME.registerComponent('gaze-hud-manager', {
             init: function () {
                 this.el.addEventListener('raycaster-intersected', () => {
@@ -269,11 +266,11 @@
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
-        <!-- MASTER WORLD ZERO CONTAINER -->
+        <!-- MASTER WORLD ZERO CONTAINER (ALIGNED TO DOORWAY DATUM) -->
         <a-entity id="noemata-spatial-anchor" position="0 0 0">
 
             <!-- 1. CLIMATE SENSOR -->
-            <a-entity id="smart-climate-asset" position="-0.868 1.4 -1.2" billboard>
+            <a-entity id="smart-climate-asset" position="-0.868 0 -0.301" billboard>
                 <a-box class="gaze-target" gaze-hud-manager width="0.14" height="0.14" depth="0.14" material="color: #38bdf8; shader: flat; opacity: 0.85; depthTest: false;"></a-box>
                 <a-text value="Climate Sensor" position="0 0.16 0" width="1.2" align="center" color="#ffffff" font="roboto"></a-text>
 
@@ -285,7 +282,7 @@
             </a-entity>
 
             <!-- 2. PERIMETER GUARD -->
-            <a-entity id="perimeter-monitor-asset" position="1.051 1.4 -1.8" billboard>
+            <a-entity id="perimeter-monitor-asset" position="1.051 0 -1.409" billboard>
                 <a-cylinder class="gaze-target" gaze-hud-manager radius="0.08" height="0.16" material="color: #60a5fa; shader: flat; opacity: 0.85; depthTest: false;"></a-cylinder>
                 <a-text value="Perimeter Monitor" position="0 0.16 0" width="1.2" align="center" color="#ffffff" font="roboto"></a-text>
 
@@ -297,7 +294,7 @@
             </a-entity>
 
             <!-- 3. POWER RELAY -->
-            <a-entity id="smart-relay-asset" position="1.716 1.4 -1.5" billboard>
+            <a-entity id="smart-relay-asset" position="1.716 0 -0.481" billboard>
                 <a-box id="relay-3d-box" class="gaze-target" gaze-hud-manager width="0.14" height="0.14" depth="0.14" material="color: #94a3b8; shader: flat; opacity: 0.85; depthTest: false;"></a-box>
                 <a-text value="Power Relay" position="0 0.16 0" width="1.2" align="center" color="#ffffff" font="roboto"></a-text>
 
@@ -315,6 +312,7 @@
     <script>
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
 
+        // Apply Relative Offsets directly into the root anchor container
         function applyDynamicPositions(map) {
             if (!map) return;
             const targets = [
@@ -327,8 +325,7 @@
                 const data = map[item.key];
                 const el = document.getElementById(item.elementId);
                 if (data && el && data.x !== undefined) {
-                    const posY = parseFloat(data.y) < 0 ? (1.4 + parseFloat(data.y)).toFixed(3) : data.y;
-                    el.setAttribute('position', `${data.x} ${posY} ${data.z}`);
+                    el.setAttribute('position', `${data.x} ${data.y} ${data.z}`);
                 }
             });
         }
@@ -394,17 +391,35 @@
             }
         }
 
-        // Clean AR Transition Trigger
+        // True Vector Re-anchoring (Matches Quest Datum Matrix)
+        function recenterToCurrentPose() {
+            const cameraEl = document.getElementById('main-camera');
+            const spatialAnchor = document.getElementById('noemata-spatial-anchor');
+
+            if (cameraEl && spatialAnchor) {
+                const camObj = cameraEl.object3D;
+
+                // Extract pure horizontal yaw (no pitch distortion)
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camObj.quaternion);
+                const horizontalYaw = Math.atan2(forward.x, forward.z);
+
+                // Re-center root container to exact phone doorway pose
+                spatialAnchor.object3D.position.set(camObj.position.x, camObj.position.y, camObj.position.z);
+                spatialAnchor.object3D.rotation.set(0, horizontalYaw, 0);
+
+                const syncState = document.getElementById('overlay-sync-state');
+                if (syncState) syncState.innerText = "Origin Synchronized at Door";
+            }
+        }
+
         function triggerEnterAR() {
             stopPreArCamera();
 
-            // Hide scanner and show AR HUD
             doorScanScreen.style.display = 'none';
             arOverlay.style.display = 'flex';
 
             const sceneEl = document.querySelector('a-scene');
 
-            // Allow the hardware camera driver 50ms to release before WebXR claims it
             setTimeout(() => {
                 if (sceneEl.enterAR) {
                     sceneEl.enterAR();
@@ -413,17 +428,7 @@
                 }
             }, 50);
 
-            // Re-center world anchor
-            setTimeout(() => {
-                const cameraEl = document.getElementById('main-camera');
-                const spatialAnchor = document.getElementById('noemata-spatial-anchor');
-                if (cameraEl && spatialAnchor) {
-                    const camPos = cameraEl.object3D.position;
-                    const camRot = cameraEl.object3D.rotation;
-                    spatialAnchor.object3D.position.set(camPos.x, 0, camPos.z);
-                    spatialAnchor.object3D.rotation.set(0, camRot.y, 0);
-                }
-            }, 350);
+            setTimeout(() => recenterToCurrentPose(), 350);
         }
 
         enterArBtn.addEventListener('click', triggerEnterAR);
@@ -431,14 +436,7 @@
 
         document.getElementById('btn-resync').addEventListener('click', (e) => {
             e.stopPropagation();
-            const cameraEl = document.getElementById('main-camera');
-            const spatialAnchor = document.getElementById('noemata-spatial-anchor');
-            if (cameraEl && spatialAnchor) {
-                const camPos = cameraEl.object3D.position;
-                const camRot = cameraEl.object3D.rotation;
-                spatialAnchor.object3D.position.set(camPos.x, 0, camPos.z);
-                spatialAnchor.object3D.rotation.set(0, camRot.y, 0);
-            }
+            recenterToCurrentPose();
         });
 
         document.getElementById('btn-hardware-toggle').addEventListener('click', (e) => {

@@ -7,7 +7,6 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-// Initialize Socket.io with CORS enabled for WebAR clients & Quest browsers
 const io = new Server(server, {
     cors: {
         origin: "*",
@@ -22,26 +21,22 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// ==============================================================
-// IN-MEMORY HARDWARE STATE TRACKER
-// ==============================================================
+// Hardware State Tracker
 let currentHardwareState = {
     relayStatus: "OFF",
     powerDraw: "0.0"
 };
 
-// ==============================================================
-// DATABASE HELPERS
-// ==============================================================
+// Database Helpers
 function readDB() {
     if (!fs.existsSync(DB_PATH)) {
         const defaultDB = {
             spaceId: "noemata-main",
             originDatum: "doorframe_main",
             anchors: {
-                smart_climate_node: { x: "-0.868", y: "-0.289", z: "-0.301" },
-                perimeter_monitor: { x: "1.051", y: "-2.719", z: "-1.409" },
-                smart_power_relay: { x: "1.716", y: "-0.858", z: "-0.481" }
+                smart_climate_node: { x: "-0.868", y: "0.000", z: "-0.301" },
+                perimeter_monitor: { x: "1.051", y: "0.000", z: "-1.409" },
+                smart_power_relay: { x: "1.716", y: "0.000", z: "-0.481" }
             }
         };
         fs.writeFileSync(DB_PATH, JSON.stringify(defaultDB, null, 2));
@@ -59,14 +54,11 @@ function writeDB(data) {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-// ==============================================================
-// SPATIAL MAP ROUTES
-// ==============================================================
+// Routes
 app.get('/api/spatial/map', (req, res) => {
     res.json(readDB());
 });
 
-// Quest Setup Endpoint: Stores exact 6DoF offsets relative to doorway origin
 app.post('/api/spatial/register', (req, res) => {
     const { deviceId, position, anchorUUID } = req.body;
     const db = readDB();
@@ -80,21 +72,15 @@ app.post('/api/spatial/register', (req, res) => {
     };
 
     writeDB(db);
-    console.log(`[ANCHOR SAVED VIA QUEST] ${deviceId} ->`, position);
+    console.log(`[ANCHOR REGISTERED] Device: ${deviceId} | Relative Position:`, position);
 
-    // Broadcast updated positions to all connected mobile phone viewers
     io.emit('spatialAnchorsUpdated', db.anchors);
     res.json({ status: 'success', deviceId, position, anchorUUID });
 });
 
-// ==============================================================
-// HARDWARE TELEMETRY & CONTROL ROUTES
-// ==============================================================
-
-// 1. Climate Node Telemetry (DHT11 / DHT22 Sensor)
+// Telemetry Endpoints
 app.post('/api/telemetry/climate', (req, res) => {
     const { deviceId, temperature, humidity, status } = req.body;
-
     const tempVal = temperature !== undefined ? temperature : "--";
     const humVal = humidity !== undefined ? humidity : "--";
     const statusVal = status || (parseFloat(tempVal) > 85 ? "OVERHEATING_WARNING" : "OPTIMAL");
@@ -105,14 +91,11 @@ app.post('/api/telemetry/climate', (req, res) => {
         humidity: humVal,
         status: statusVal
     });
-
     res.json({ status: "success", message: "Climate telemetry processed" });
 });
 
-// 2. Safety / Perimeter Monitor Telemetry
 app.post('/api/telemetry/safety', (req, res) => {
     const { deviceId, distance, perimeter } = req.body;
-
     const distVal = distance !== undefined ? distance : 0;
     const stateVal = perimeter || (distVal > 0 && distVal < 12 ? "BREACH_ALERT" : "SECURE");
 
@@ -123,14 +106,11 @@ app.post('/api/telemetry/safety', (req, res) => {
             breachCount: stateVal === "BREACH_ALERT" ? 1 : 0
         }
     });
-
     res.json({ status: "success", message: "Safety telemetry processed" });
 });
 
-// 3. Smart Power Relay Telemetry
 app.post('/api/telemetry/relay', (req, res) => {
     const { state, powerDraw } = req.body;
-
     if (state !== undefined) currentHardwareState.relayStatus = state;
     if (powerDraw !== undefined) currentHardwareState.powerDraw = powerDraw;
 
@@ -140,11 +120,10 @@ app.post('/api/telemetry/relay', (req, res) => {
             powerDraw: currentHardwareState.powerDraw
         }
     });
-
     res.json({ status: "success", currentHardwareState });
 });
 
-// 4. Bi-Directional Relay Toggle (From Mobile UI / Quest)
+// Bi-directional hardware toggle
 app.post('/api/hardware/relay/toggle', (req, res) => {
     const newStatus = currentHardwareState.relayStatus === "ON" ? "OFF" : "ON";
     const newPower = newStatus === "ON" ? "0.42" : "0.0";
@@ -165,65 +144,24 @@ app.post('/api/hardware/relay/toggle', (req, res) => {
     res.json({ status: "success", newState: newStatus, powerDraw: newPower });
 });
 
-// Arduino GET polling endpoint
 app.get('/api/hardware/relay/status', (req, res) => {
     res.json({ command: currentHardwareState.relayStatus });
 });
 
-// Test Telemetry Route
-app.get('/api/test-telemetry', (req, res) => {
-    io.emit('climateStateUpdate', {
-        temperature: "76.4",
-        humidity: "42.0",
-        status: "OPTIMAL"
-    });
-
-    io.emit('twinStateUpdate', {
-        perimeter_monitor: { perimeter: "SECURE", distance: 24, breachCount: 0 },
-        smart_power_relay: { status: currentHardwareState.relayStatus, powerDraw: currentHardwareState.powerDraw }
-    });
-
-    res.send("Test telemetry broadcast emitted!");
-});
-
-// ==============================================================
-// REAL-TIME WEBSOCKET MANAGEMENT
-// ==============================================================
+// Real-time Sockets
 io.on('connection', (socket) => {
     console.log(`[CLIENT CONNECTED] ID: ${socket.id}`);
-
     const db = readDB();
     socket.emit('spatialAnchorsUpdated', db.anchors || db);
-
-    socket.on('toggleRelay', () => {
-        const newStatus = currentHardwareState.relayStatus === "ON" ? "OFF" : "ON";
-        const newPower = newStatus === "ON" ? "0.42" : "0.0";
-
-        currentHardwareState.relayStatus = newStatus;
-        currentHardwareState.powerDraw = newPower;
-
-        io.emit('relayHardwareCommand', { command: newStatus });
-        io.emit('twinStateUpdate', {
-            smart_power_relay: {
-                status: newStatus,
-                powerDraw: newPower
-            }
-        });
-    });
 
     socket.on('disconnect', () => {
         console.log(`[CLIENT DISCONNECTED] ID: ${socket.id}`);
     });
 });
 
-// ==============================================================
-// SERVER STARTUP
-// ==============================================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`==================================================`);
-    console.log(`  NOEMATA DUAL PIPELINE ACTIVE ON PORT ${PORT}`);
-    console.log(`  STEP 1 QUEST SETUP:  https://your-domain/setup.html`);
-    console.log(`  STEP 2 PHONE VIEWER: https://your-domain/`);
+    console.log(`  NOEMATA SERVER ACTIVE ON PORT ${PORT}`);
     console.log(`==================================================`);
 });

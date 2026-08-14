@@ -196,7 +196,6 @@
         window.lockedCoords = null;
         window.isHoveringButton = false;
 
-        // Doorway Origin Reference Frame (Stored in memory)
         window.originOffset = { x: 0, y: 0, z: 0, yaw: 0 };
         window.isOriginSet = false;
 
@@ -220,18 +219,21 @@
             btn.addEventListener('raycaster-intersected-cleared', () => { window.isHoveringButton = false; });
         });
 
-        // 1. Set Doorframe Origin
+        // 1. Set Doorframe Origin (True Horizontal Forward Vector)
         zeroOriginBtn.addEventListener('click', () => {
             const cameraEl = document.getElementById('main-camera');
             if (cameraEl) {
-                const camPos = cameraEl.object3D.position;
-                const camRot = cameraEl.object3D.rotation;
+                const camObj = cameraEl.object3D;
+                
+                // Get true horizontal direction without pitch/tilt
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camObj.quaternion);
+                const horizontalYaw = Math.atan2(forward.x, forward.z);
 
                 window.originOffset = {
-                    x: camPos.x,
-                    y: camPos.y,
-                    z: camPos.z,
-                    yaw: camRot.y
+                    x: camObj.position.x,
+                    y: camObj.position.y,
+                    z: camObj.position.z,
+                    yaw: horizontalYaw
                 };
                 window.isOriginSet = true;
 
@@ -242,7 +244,7 @@
             }
         });
 
-        // Math Transform: Converts raw Quest World space into Doorway Offset space
+        // Accurate World -> Relative Door Datum Transform Matrix
         window.transformToOrigin = function(rawPos) {
             if (!window.isOriginSet) {
                 return {
@@ -252,22 +254,21 @@
                 };
             }
 
-            // Translate
             const dx = rawPos.x - window.originOffset.x;
             const dy = rawPos.y - window.originOffset.y;
             const dz = rawPos.z - window.originOffset.z;
 
-            // Rotate by inverse doorway yaw
-            const cos = Math.cos(-window.originOffset.yaw);
-            const sin = Math.sin(-window.originOffset.yaw);
+            const angle = -window.originOffset.yaw;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
 
-            const rotatedX = (dx * cos) - (dz * sin);
-            const rotatedZ = (dx * sin) + (dz * cos);
+            const relX = (dx * cos) - (dz * sin);
+            const relZ = (dx * sin) + (dz * cos);
 
             return {
-                x: parseFloat(rotatedX.toFixed(3)),
+                x: parseFloat(relX.toFixed(3)),
                 y: parseFloat(dy.toFixed(3)),
-                z: parseFloat(rotatedZ.toFixed(3))
+                z: parseFloat(relZ.toFixed(3))
             };
         };
 
@@ -315,7 +316,6 @@
             statusLabel.setAttribute('color', '#94a3b8');
         }
 
-        // Quest enterAR launcher
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const sceneEl = document.querySelector('a-scene');
             const button = document.getElementById('custom-ar-btn');
