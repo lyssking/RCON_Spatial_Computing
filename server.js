@@ -16,37 +16,33 @@ const io = new Server(server, {
 
 const DB_PATH = path.join(__dirname, 'spatial-db.json');
 
-// Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// Hardware State Tracker
 let currentHardwareState = {
-    relayStatus: "OFF",
-    powerDraw: "0.0"
+    relayStatus: "ON",
+    powerDraw: "1.42"
 };
 
-// Database Helpers
 function readDB() {
     if (!fs.existsSync(DB_PATH)) {
         const defaultDB = {
-            spaceId: "noemata-main",
-            originDatum: "doorframe_main",
+            spaceId: "noemata-facility-alpha",
+            originDatum: "doorframe_datum",
             anchors: {
-                smart_climate_node: { x: "-0.868", y: "0.000", z: "-0.301" },
-                perimeter_monitor: { x: "1.051", y: "0.000", z: "-1.409" },
-                smart_power_relay: { x: "1.716", y: "0.000", z: "-0.481" }
+                smart_climate_node: { x: "-0.85", y: "2.10", z: "-2.40" },
+                perimeter_monitor: { x: "1.20", y: "2.40", z: "-3.10" },
+                smart_power_relay: { x: "1.45", y: "1.20", z: "-1.80" }
             }
         };
         fs.writeFileSync(DB_PATH, JSON.stringify(defaultDB, null, 2));
         return defaultDB;
     }
     try {
-        const raw = fs.readFileSync(DB_PATH, 'utf8');
-        return JSON.parse(raw);
+        return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
     } catch (e) {
-        return { spaceId: "noemata-main", originDatum: "doorframe_main", anchors: {} };
+        return { spaceId: "noemata-facility-alpha", anchors: {} };
     }
 }
 
@@ -54,84 +50,57 @@ function writeDB(data) {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-// Routes
+// Spatial REST Endpoints
 app.get('/api/spatial/map', (req, res) => {
     res.json(readDB());
 });
 
 app.post('/api/spatial/register', (req, res) => {
-    const { deviceId, position, anchorUUID } = req.body;
+    const { deviceId, position } = req.body;
     const db = readDB();
-
     if (!db.anchors) db.anchors = {};
 
     db.anchors[deviceId] = {
-        ...position,
-        anchorUUID: anchorUUID || null,
+        x: String(position.x),
+        y: String(position.y),
+        z: String(position.z),
         timestamp: Date.now()
     };
 
     writeDB(db);
-    console.log(`[ANCHOR REGISTERED] Device: ${deviceId} | Relative Position:`, position);
-
+    console.log(`[SAVED TO DB] ${deviceId} -> X:${position.x} Y:${position.y} Z:${position.z}`);
     io.emit('spatialAnchorsUpdated', db.anchors);
-    res.json({ status: 'success', deviceId, position, anchorUUID });
+    res.json({ status: 'success', deviceId, position });
 });
 
-// Telemetry Endpoints
+// Telemetry & Hardware Control
 app.post('/api/telemetry/climate', (req, res) => {
-    const { deviceId, temperature, humidity, status } = req.body;
-    const tempVal = temperature !== undefined ? temperature : "--";
-    const humVal = humidity !== undefined ? humidity : "--";
-    const statusVal = status || (parseFloat(tempVal) > 85 ? "OVERHEATING_WARNING" : "OPTIMAL");
-
+    const { temperature, humidity, status } = req.body;
     io.emit('climateStateUpdate', {
-        deviceId: deviceId || 'smart_climate_node',
-        temperature: tempVal,
-        humidity: humVal,
-        status: statusVal
+        temperature: temperature || "72.4",
+        humidity: humidity || "45.0",
+        status: status || "OPTIMAL"
     });
-    res.json({ status: "success", message: "Climate telemetry processed" });
+    res.json({ status: "success" });
 });
 
 app.post('/api/telemetry/safety', (req, res) => {
-    const { deviceId, distance, perimeter } = req.body;
-    const distVal = distance !== undefined ? distance : 0;
-    const stateVal = perimeter || (distVal > 0 && distVal < 12 ? "BREACH_ALERT" : "SECURE");
-
+    const { distance, perimeter } = req.body;
     io.emit('twinStateUpdate', {
         perimeter_monitor: {
-            perimeter: stateVal,
-            distance: distVal,
-            breachCount: stateVal === "BREACH_ALERT" ? 1 : 0
+            perimeter: perimeter || "SECURE",
+            distance: distance || 28,
+            breachCount: perimeter === "BREACH_ALERT" ? 1 : 0
         }
     });
-    res.json({ status: "success", message: "Safety telemetry processed" });
+    res.json({ status: "success" });
 });
 
-app.post('/api/telemetry/relay', (req, res) => {
-    const { state, powerDraw } = req.body;
-    if (state !== undefined) currentHardwareState.relayStatus = state;
-    if (powerDraw !== undefined) currentHardwareState.powerDraw = powerDraw;
-
-    io.emit('twinStateUpdate', {
-        smart_power_relay: {
-            status: currentHardwareState.relayStatus,
-            powerDraw: currentHardwareState.powerDraw
-        }
-    });
-    res.json({ status: "success", currentHardwareState });
-});
-
-// Bi-directional hardware toggle
 app.post('/api/hardware/relay/toggle', (req, res) => {
     const newStatus = currentHardwareState.relayStatus === "ON" ? "OFF" : "ON";
-    const newPower = newStatus === "ON" ? "0.42" : "0.0";
-
+    const newPower = newStatus === "ON" ? "1.42" : "0.00";
     currentHardwareState.relayStatus = newStatus;
     currentHardwareState.powerDraw = newPower;
-
-    console.log(`[HARDWARE TOGGLE] Relay set to: ${newStatus}`);
 
     io.emit('relayHardwareCommand', { command: newStatus });
     io.emit('twinStateUpdate', {
@@ -140,28 +109,30 @@ app.post('/api/hardware/relay/toggle', (req, res) => {
             powerDraw: newPower
         }
     });
-
-    res.json({ status: "success", newState: newStatus, powerDraw: newPower });
+    res.json({ status: "success", state: currentHardwareState });
 });
 
 app.get('/api/hardware/relay/status', (req, res) => {
     res.json({ command: currentHardwareState.relayStatus });
 });
 
-// Real-time Sockets
+// Sockets
 io.on('connection', (socket) => {
-    console.log(`[CLIENT CONNECTED] ID: ${socket.id}`);
     const db = readDB();
     socket.emit('spatialAnchorsUpdated', db.anchors || db);
+    socket.emit('twinStateUpdate', {
+        smart_power_relay: currentHardwareState
+    });
 
-    socket.on('disconnect', () => {
-        console.log(`[CLIENT DISCONNECTED] ID: ${socket.id}`);
+    socket.on('toggleRelay', () => {
+        const newStatus = currentHardwareState.relayStatus === "ON" ? "OFF" : "ON";
+        currentHardwareState.relayStatus = newStatus;
+        currentHardwareState.powerDraw = newStatus === "ON" ? "1.42" : "0.00";
+        io.emit('twinStateUpdate', { smart_power_relay: currentHardwareState });
     });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`==================================================`);
-    console.log(`  NOEMATA SERVER ACTIVE ON PORT ${PORT}`);
-    console.log(`==================================================`);
+    console.log(`NOEMATA INDUSTRIAL SERVER RUNNING ON PORT ${PORT}`);
 });

@@ -3,202 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Noemata // Industrial Telemetry</title>
-    
+    <title>Noemata // Industrial Twin</title>
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-
     <style>
         :root {
-            --bg-glass: rgba(18, 20, 24, 0.85);
-            --border-glass: rgba(255, 255, 255, 0.12);
-            --success: #10b981;
-            --danger: #ef4444;
-            --text-primary: #f8fafc;
-            --text-muted: #94a3b8;
+            --bg-card: rgba(15, 23, 42, 0.88);
+            --border: rgba(255, 255, 255, 0.12);
+            --accent: #38bdf8;
+            --success: #34d399;
+            --danger: #f87171;
+            --text: #f8fafc;
         }
 
         html, body {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden;
-            background-color: transparent !important;
-            touch-action: none; user-select: none;
+            overflow: hidden; background-color: transparent !important;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            color: var(--text-primary);
+            color: var(--text);
         }
 
-        .a-canvas {
-            background-color: transparent !important;
+        .a-canvas { background-color: transparent !important; }
+
+        /* MINIMAL EXECUTIVE HUD OVERLAY */
+        #mobile-hud {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: space-between;
+            box-sizing: border-box; padding: 20px 16px; pointer-events: none; z-index: 10000;
         }
 
-        #door-scan-screen {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #090a0f;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: space-between;
-            box-sizing: border-box; padding: 48px 24px;
-            z-index: 100000;
-        }
-
-        .scan-header {
-            text-align: center;
-        }
-
-        .scan-header h1 {
-            font-size: 20px; font-weight: 600; margin: 0 0 6px 0;
-            letter-spacing: -0.02em; color: var(--text-primary);
-        }
-
-        .scan-header p {
-            color: var(--text-muted); font-size: 14px; margin: 0;
-        }
-
-        .scanner-frame-box {
-            position: relative;
-            width: 260px; height: 260px;
-            border-radius: 20px;
-            overflow: hidden;
-            background: #000;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-        }
-
-        #scanner-video {
-            width: 100%; height: 100%;
-            object-fit: cover;
-        }
-
-        .viewfinder-corners {
-            position: absolute;
-            width: 180px; height: 180px;
-            pointer-events: none;
-            box-sizing: border-box;
-        }
-        
-        .viewfinder-corners::before,
-        .viewfinder-corners::after {
-            content: ''; position: absolute; width: 24px; height: 24px;
-            border-color: #ffffff; border-style: solid;
-        }
-        .viewfinder-corners::before { top: 0; left: 0; border-width: 2.5px 0 0 2.5px; border-top-left-radius: 8px; }
-        .viewfinder-corners::after { bottom: 0; right: 0; border-width: 0 2.5px 2.5px 0; border-bottom-right-radius: 8px; }
-
-        .scan-footer {
-            width: 100%; max-width: 320px;
-            display: flex; flex-direction: column; align-items: center; gap: 12px;
-        }
-
-        #scan-status {
-            font-size: 13px; color: var(--text-muted);
-            text-align: center; min-height: 18px;
-        }
-
-        .btn-primary {
-            width: 100%; padding: 14px 20px;
-            border-radius: 12px; border: none;
-            background: var(--text-primary); color: #090a0f;
-            font-size: 15px; font-weight: 600; cursor: pointer;
-            transition: all 0.15s ease;
-        }
-
-        .btn-primary:active {
-            transform: scale(0.98); opacity: 0.9;
-        }
-
-        .btn-secondary {
-            background: transparent; color: var(--text-muted); border: none;
-            font-size: 13px; font-weight: 500; cursor: pointer;
-            padding: 8px;
-        }
-
-        #mobile-ar-overlay {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none;
-            display: flex; flex-direction: column;
-            justify-content: space-between;
-            box-sizing: border-box; padding: 20px 16px;
-            z-index: 10000;
-        }
-
-        .ar-status-pill {
-            align-self: center;
-            background: var(--bg-glass);
-            border: 1px solid var(--border-glass);
-            border-radius: 30px;
-            padding: 8px 16px;
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
+        .status-pill {
+            align-self: center; background: var(--bg-card);
+            border: 1px solid var(--border); border-radius: 30px;
+            padding: 8px 18px; font-size: 13px; font-weight: 600;
+            backdrop-filter: blur(16px); pointer-events: auto;
             display: flex; align-items: center; gap: 8px;
-            font-size: 12px; font-weight: 500;
-            pointer-events: auto;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
         }
 
-        .status-dot {
-            width: 7px; height: 7px;
-            border-radius: 50%;
-            background: var(--success);
-        }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
 
-        .ar-control-bar {
+        .btn-bottom-bar {
             display: flex; gap: 10px; pointer-events: auto; width: 100%;
         }
 
-        .ar-btn {
-            flex: 1; padding: 14px 12px; border-radius: 14px;
-            border: 1px solid var(--border-glass);
-            background: var(--bg-glass);
-            color: var(--text-primary);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            font-size: 13px; font-weight: 600; cursor: pointer;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        .btn {
+            flex: 1; padding: 15px 12px; border-radius: 14px; font-size: 14px; font-weight: 600;
+            cursor: pointer; border: 1px solid var(--border); background: var(--bg-card);
+            color: #fff; backdrop-filter: blur(16px);
             transition: all 0.15s ease;
         }
+        .btn:active { transform: scale(0.97); }
 
-        .ar-btn:active {
-            transform: scale(0.97);
+        #btn-power { background: #fff; color: #0f172a; border: none; }
+
+        /* PRE-LAUNCH MODAL */
+        #launch-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #090d16; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; padding: 24px;
+            box-sizing: border-box; z-index: 99999; text-align: center;
         }
 
-        #btn-hardware-toggle {
-            background: var(--text-primary);
-            color: #090a0f;
-            border: none;
+        .launch-btn {
+            margin-top: 24px; padding: 16px 36px; background: #fff; color: #0f172a;
+            border-radius: 14px; font-size: 16px; font-weight: 600; border: none; cursor: pointer;
+            box-shadow: 0 4px 25px rgba(255,255,255,0.2);
         }
     </style>
 </head>
 <body>
 
-    <div id="door-scan-screen">
-        <div class="scan-header">
-            <h1>Noemata Vision</h1>
-            <p>Scan doorway code to align room coordinate map</p>
-        </div>
-
-        <div class="scanner-frame-box">
-            <video id="scanner-video" playsinline muted autoplay></video>
-            <div class="viewfinder-corners"></div>
-        </div>
-
-        <div class="scan-footer">
-            <div id="scan-status">Searching for origin code...</div>
-            <button class="btn-primary" id="btn-enter-ar" style="display: none;">Enter Workspace AR</button>
-            <button class="btn-secondary" id="btn-manual-launch">Skip calibration</button>
-        </div>
+    <div id="launch-screen">
+        <h1 style="font-size: 22px; font-weight: 700; margin: 0 0 8px 0;">Noemata Vision</h1>
+        <p style="color: #94a3b8; margin: 0; font-size: 14px;">Stand at door threshold facing into facility</p>
+        <button class="launch-btn" id="btn-start">ENTER FACILITY AR</button>
     </div>
 
-    <div id="mobile-ar-overlay" style="display: none;">
-        <div class="ar-status-pill">
-            <div class="status-dot"></div>
-            <span id="overlay-sync-state">Live Telemetry Synchronized</span>
+    <div id="mobile-hud" style="display: none;">
+        <div class="status-pill">
+            <div class="dot"></div>
+            <span id="hud-status">Live Telemetry Synchronized</span>
         </div>
-
-        <div class="ar-control-bar">
-            <button class="ar-btn" id="btn-resync">Re-Center Origin</button>
-            <button class="ar-btn" id="btn-hardware-toggle">Power: Toggle</button>
+        <div class="btn-bottom-bar">
+            <button class="btn" id="btn-recenter">Re-Center (At Door)</button>
+            <button class="btn" id="btn-power">Power: ON</button>
         </div>
     </div>
 
@@ -217,86 +106,57 @@
             }
         });
 
+        // Smooth Billboard LookAt
         AFRAME.registerComponent('billboard', {
             tick: function () {
                 const cam = document.getElementById('main-camera');
                 if (!cam) return;
                 const nodePos = this.el.object3D.position;
                 const camPos = cam.object3D.position;
-                const angleY = Math.atan2(camPos.x - nodePos.x, camPos.z - nodePos.z);
-                this.el.object3D.rotation.y = angleY;
-            }
-        });
-
-        AFRAME.registerComponent('gaze-hud-manager', {
-            init: function () {
-                this.el.addEventListener('raycaster-intersected', () => {
-                    const card = this.el.parentElement.querySelector('.info-card');
-                    if (card) card.setAttribute('visible', 'true');
-                });
-                this.el.addEventListener('raycaster-intersected-cleared', () => {
-                    const card = this.el.parentElement.querySelector('.info-card');
-                    if (card) card.setAttribute('visible', 'false');
-                });
+                this.el.object3D.rotation.y = Math.atan2(camPos.x - nodePos.x, camPos.z - nodePos.z);
             }
         });
     </script>
 
     <a-scene force-passthrough
              webxr="referenceSpaceType: local-floor;"
-             renderer="alpha: true; colorManagement: true; antialias: true;"
+             renderer="alpha: true; antialias: true;"
              xr-mode-ui="enabled: false">
 
-        <a-entity id="rig" position="0 0 0">
-            <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
-                <a-entity cursor="fuse: false;"
-                          raycaster="objects: .gaze-target; far: 8;"
-                          position="0 0 -1"
-                          geometry="primitive: ring; radiusInner: 0.003; radiusOuter: 0.006"
-                          material="color: #ffffff; shader: flat; opacity: 0.6; depthTest: false;">
-                </a-entity>
-            </a-entity>
-        </a-entity>
+        <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
+        <a-entity light="type: ambient; intensity: 1.5;"></a-entity>
 
-        <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
+        <!-- MASTER ROOT ANCHOR (FLOOR ZEROED) -->
+        <a-entity id="root-anchor" position="0 0 0">
 
-        <!-- MASTER WORLD ZERO CONTAINER (ALIGNED TO STICKER) -->
-        <a-entity id="noemata-spatial-anchor" position="0 0 0">
-
-            <!-- 1. CLIMATE SENSOR -->
-            <a-entity id="smart-climate-asset" position="0 0 -2.0" billboard>
-                <a-box class="gaze-target" gaze-hud-manager width="0.14" height="0.14" depth="0.14" material="color: #38bdf8; shader: flat; opacity: 0.85; depthTest: false;"></a-box>
+            <!-- 1. CLIMATE NODE -->
+            <a-entity id="smart-climate-asset" position="-0.85 2.10 -2.40" billboard>
+                <a-box width="0.14" height="0.14" depth="0.14" material="color: #38bdf8; opacity: 0.9;"></a-box>
                 <a-text value="Climate Sensor" position="0 0.16 0" width="1.2" align="center" color="#ffffff" font="roboto"></a-text>
-
-                <a-entity class="info-card" position="0 0.42 0" visible="false">
-                    <a-plane width="0.65" height="0.30" color="#111827" opacity="0.9" material="shader: flat; depthTest: false;"></a-plane>
-                    <a-text id="popup-climate-status" value="STATUS: OPTIMAL" color="#34d399" width="0.95" position="-0.28 0.07 0.01" font="roboto"></a-text>
-                    <a-text id="popup-climate-temp" value="-- °F  ·  --% RH" color="#f9fafb" width="0.9" position="-0.28 -0.04 0.01" font="roboto"></a-text>
-                </a-entity>
+                <a-plane width="0.75" height="0.30" color="#0f172a" opacity="0.92" position="0 0.42 0">
+                    <a-text id="txt-climate-status" value="STATUS: OPTIMAL" color="#34d399" position="-0.32 0.07 0.01" width="1.0" font="roboto"></a-text>
+                    <a-text id="txt-climate-metrics" value="72.4 °F · 45.0% RH" color="#ffffff" position="-0.32 -0.04 0.01" width="0.95" font="roboto"></a-text>
+                </a-plane>
             </a-entity>
 
             <!-- 2. PERIMETER GUARD -->
-            <a-entity id="perimeter-monitor-asset" position="0 0 -2.0" billboard>
-                <a-cylinder class="gaze-target" gaze-hud-manager radius="0.08" height="0.16" material="color: #60a5fa; shader: flat; opacity: 0.85; depthTest: false;"></a-cylinder>
+            <a-entity id="perimeter-monitor-asset" position="1.20 2.40 -3.10" billboard>
+                <a-cylinder radius="0.08" height="0.16" material="color: #60a5fa; opacity: 0.9;"></a-cylinder>
                 <a-text value="Perimeter Monitor" position="0 0.16 0" width="1.2" align="center" color="#ffffff" font="roboto"></a-text>
-
-                <a-entity class="info-card" position="0 0.42 0" visible="false">
-                    <a-plane width="0.65" height="0.30" color="#111827" opacity="0.9" material="shader: flat; depthTest: false;"></a-plane>
-                    <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#34d399" width="0.95" position="-0.28 0.07 0.01" font="roboto"></a-text>
-                    <a-text id="popup-perimeter-breach" value="0 Breaches Logged" color="#9ca3af" width="0.85" position="-0.28 -0.04 0.01" font="roboto"></a-text>
-                </a-entity>
+                <a-plane width="0.75" height="0.30" color="#0f172a" opacity="0.92" position="0 0.42 0">
+                    <a-text id="txt-perimeter-status" value="SHIELD: SECURE" color="#34d399" position="-0.32 0.07 0.01" width="1.0" font="roboto"></a-text>
+                    <a-text id="txt-perimeter-dist" value="Clearance: 28 in" color="#94a3b8" position="-0.32 -0.04 0.01" width="0.95" font="roboto"></a-text>
+                </a-plane>
             </a-entity>
 
-            <!-- 3. POWER RELAY -->
-            <a-entity id="smart-relay-asset" position="0 0 -2.0" billboard>
-                <a-box id="relay-3d-box" class="gaze-target" gaze-hud-manager width="0.14" height="0.14" depth="0.14" material="color: #94a3b8; shader: flat; opacity: 0.85; depthTest: false;"></a-box>
+            <!-- 3. SMART POWER RELAY -->
+            <a-entity id="smart-relay-asset" position="1.45 1.20 -1.80" billboard>
+                <a-box id="relay-3d-box" width="0.14" height="0.14" depth="0.14" material="color: #34d399; opacity: 0.9;"></a-box>
                 <a-text value="Power Relay" position="0 0.16 0" width="1.2" align="center" color="#ffffff" font="roboto"></a-text>
-
-                <a-entity class="info-card" position="0 0.42 0" visible="false">
-                    <a-plane width="0.65" height="0.30" color="#111827" opacity="0.9" material="shader: flat; depthTest: false;"></a-plane>
-                    <a-text id="popup-relay-status" value="RELAY: OFF" color="#9ca3af" width="0.95" position="-0.28 0.07 0.01" font="roboto"></a-text>
-                    <a-text id="popup-relay-power" value="0.0 kW Load" color="#f9fafb" width="0.85" position="-0.28 -0.04 0.01" font="roboto"></a-text>
-                </a-entity>
+                <a-plane width="0.75" height="0.30" color="#0f172a" opacity="0.92" position="0 0.42 0">
+                    <a-text id="txt-relay-status" value="RELAY: ON" color="#34d399" position="-0.32 0.07 0.01" width="1.0" font="roboto"></a-text>
+                    <a-text id="txt-relay-load" value="Load: 1.42 kW" color="#ffffff" position="-0.32 -0.04 0.01" width="0.95" font="roboto"></a-text>
+                </a-plane>
             </a-entity>
 
         </a-entity>
@@ -306,193 +166,94 @@
     <script>
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
 
-        // Apply Relative Offsets directly from spatial-db.json
-        function applyDynamicPositions(map) {
-            if (!map) return;
-            const targets = [
-                { key: 'smart_climate_node', elementId: 'smart-climate-asset' },
-                { key: 'perimeter_monitor', elementId: 'perimeter-monitor-asset' },
-                { key: 'smart_power_relay', elementId: 'smart-relay-asset' }
+        function applyPositions(anchors) {
+            if (!anchors) return;
+            const map = [
+                { key: 'smart_climate_node', id: 'smart-climate-asset' },
+                { key: 'perimeter_monitor', id: 'perimeter-monitor-asset' },
+                { key: 'smart_power_relay', id: 'smart-relay-asset' }
             ];
 
-            targets.forEach(item => {
-                const data = map[item.key];
-                const el = document.getElementById(item.elementId);
+            map.forEach(item => {
+                const data = anchors[item.key];
+                const el = document.getElementById(item.id);
                 if (data && el && data.x !== undefined) {
                     el.setAttribute('position', `${data.x} ${data.y} ${data.z}`);
                 }
             });
         }
 
-        fetch('/api/spatial/map')
-            .then(res => res.json())
-            .then(db => applyDynamicPositions(db.anchors || db));
+        fetch('/api/spatial/map').then(r => r.json()).then(d => applyPositions(d.anchors || d));
+        socket.on('spatialAnchorsUpdated', anchors => applyPositions(anchors));
 
-        socket.on('spatialAnchorsUpdated', (anchors) => applyDynamicPositions(anchors));
-
-        const videoEl = document.getElementById('scanner-video');
-        const scanStatus = document.getElementById('scan-status');
-        const enterArBtn = document.getElementById('btn-enter-ar');
-        const doorScanScreen = document.getElementById('door-scan-screen');
-        const arOverlay = document.getElementById('mobile-ar-overlay');
-        let cameraStream = null;
-        let scanInterval = null;
-
-        async function initDoorframeCamera() {
-            try {
-                cameraStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-                });
-                videoEl.srcObject = cameraStream;
-                startQRInspection();
-            } catch (err) {
-                scanStatus.innerText = "Camera unavailable";
-                enterArBtn.style.display = 'block';
+        function setFloorOrigin() {
+            const cam = document.getElementById('main-camera');
+            const root = document.getElementById('root-anchor');
+            if (cam && root) {
+                // Instantly align root to phone's current floor position
+                root.object3D.position.set(cam.object3D.position.x, 0, cam.object3D.position.z);
             }
         }
 
-        function startQRInspection() {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
+        document.getElementById('btn-start').addEventListener('click', () => {
+            document.getElementById('launch-screen').style.display = 'none';
+            document.getElementById('mobile-hud').style.display = 'flex';
 
-            scanInterval = setInterval(() => {
-                if (videoEl && videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
-                    canvas.width = videoEl.videoWidth;
-                    canvas.height = videoEl.videoHeight;
-                    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const scene = document.querySelector('a-scene');
+            if (scene.enterAR) scene.enterAR(); else scene.enterVR();
 
-                    const code = jsQR(imgData.data, imgData.width, imgData.height);
-                    if (code && (code.data.includes("doorframe") || code.data.includes("noemata"))) {
-                        clearInterval(scanInterval);
-                        scanStatus.innerText = "Origin code matched";
-                        scanStatus.style.color = "#10b981";
-                        enterArBtn.style.display = 'block';
-                    }
-                }
-            }, 120);
-        }
+            setTimeout(setFloorOrigin, 250);
+        });
 
-        function stopPreArCamera() {
-            clearInterval(scanInterval);
-            if (cameraStream) {
-                cameraStream.getTracks().forEach(t => t.stop());
-                cameraStream = null;
-            }
-            if (videoEl) {
-                videoEl.srcObject = null;
-            }
-        }
-
-        function recenterToCurrentPose() {
-            const cameraEl = document.getElementById('main-camera');
-            const spatialAnchor = document.getElementById('noemata-spatial-anchor');
-
-            if (cameraEl && spatialAnchor) {
-                const camObj = cameraEl.object3D;
-
-                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camObj.quaternion);
-                const horizontalYaw = Math.atan2(forward.x, forward.z);
-
-                // Zero out to phone camera scanning position at sticker
-                spatialAnchor.object3D.position.set(camObj.position.x, camObj.position.y, camObj.position.z);
-                spatialAnchor.object3D.rotation.set(0, horizontalYaw, 0);
-
-                const syncState = document.getElementById('overlay-sync-state');
-                if (syncState) syncState.innerText = "Origin Synchronized at Door";
-            }
-        }
-
-        function triggerEnterAR() {
-            stopPreArCamera();
-
-            doorScanScreen.style.display = 'none';
-            arOverlay.style.display = 'flex';
-
-            const sceneEl = document.querySelector('a-scene');
-
-            setTimeout(() => {
-                if (sceneEl.enterAR) {
-                    sceneEl.enterAR();
-                } else if (sceneEl.enterVR) {
-                    sceneEl.enterVR();
-                }
-            }, 50);
-
-            setTimeout(() => recenterToCurrentPose(), 350);
-        }
-
-        enterArBtn.addEventListener('click', triggerEnterAR);
-        document.getElementById('btn-manual-launch').addEventListener('click', triggerEnterAR);
-
-        document.getElementById('btn-resync').addEventListener('click', (e) => {
+        document.getElementById('btn-recenter').addEventListener('click', (e) => {
             e.stopPropagation();
-            recenterToCurrentPose();
+            setFloorOrigin();
         });
 
-        document.getElementById('btn-hardware-toggle').addEventListener('click', (e) => {
+        document.getElementById('btn-power').addEventListener('click', (e) => {
             e.stopPropagation();
-            fetch('/api/hardware/relay/toggle', { method: 'POST' })
-                .catch(err => console.error("Toggle failed:", err));
+            fetch('/api/hardware/relay/toggle', { method: 'POST' });
         });
 
-        // Socket Telemetry Listeners
-        socket.on('climateStateUpdate', (data) => {
-            const tempText = document.getElementById('popup-climate-temp');
-            const statusText = document.getElementById('popup-climate-status');
-            const climateBox = document.querySelector('#smart-climate-asset a-box');
-
-            if (tempText && statusText) {
-                tempText.setAttribute('value', `${data.temperature} °F  ·  ${data.humidity}% RH`);
-                statusText.setAttribute('value', `STATUS: ${data.status}`);
-
-                const isWarning = data.status === "OVERHEATING_WARNING";
-                const activeColor = isWarning ? "#ef4444" : "#10b981";
-                statusText.setAttribute('color', activeColor);
-                if (climateBox) climateBox.setAttribute('material', 'color', isWarning ? "#ef4444" : "#38bdf8");
+        // Telemetry Update Handlers
+        socket.on('climateStateUpdate', d => {
+            const statusEl = document.getElementById('txt-climate-status');
+            const metricsEl = document.getElementById('txt-climate-metrics');
+            if (metricsEl) metricsEl.setAttribute('value', `${d.temperature} °F · ${d.humidity}% RH`);
+            if (statusEl) {
+                statusEl.setAttribute('value', `STATUS: ${d.status}`);
+                statusEl.setAttribute('color', d.status === "OVERHEATING_WARNING" ? "#f87171" : "#34d399");
             }
         });
 
-        socket.on('twinStateUpdate', (state) => {
-            if (state.perimeter_monitor) {
-                const pStatus = document.getElementById('popup-perimeter-status');
-                const pBreach = document.getElementById('popup-perimeter-breach');
-                const pCylinder = document.querySelector('#perimeter-monitor-asset a-cylinder');
-
-                const isBreached = state.perimeter_monitor.perimeter === "BREACH_ALERT";
-                const pColor = isBreached ? "#ef4444" : "#10b981";
-
-                if (pStatus) {
-                    pStatus.setAttribute('value', `SHIELD: ${state.perimeter_monitor.perimeter}`);
-                    pStatus.setAttribute('color', pColor);
+        socket.on('twinStateUpdate', s => {
+            if (s.perimeter_monitor) {
+                const statusEl = document.getElementById('txt-perimeter-status');
+                const distEl = document.getElementById('txt-perimeter-dist');
+                const isBreach = s.perimeter_monitor.perimeter === "BREACH_ALERT";
+                if (statusEl) {
+                    statusEl.setAttribute('value', `SHIELD: ${s.perimeter_monitor.perimeter}`);
+                    statusEl.setAttribute('color', isBreach ? "#f87171" : "#34d399");
                 }
-                if (pBreach) pBreach.setAttribute('value', `${state.perimeter_monitor.breachCount} Breaches Logged`);
-                if (pCylinder) pCylinder.setAttribute('material', 'color', isBreached ? "#ef4444" : "#60a5fa");
+                if (distEl) distEl.setAttribute('value', `Clearance: ${s.perimeter_monitor.distance} in`);
             }
 
-            if (state.smart_power_relay) {
-                const rStatus = document.getElementById('popup-relay-status');
-                const rPower = document.getElementById('popup-relay-power');
-                const rBox = document.getElementById('relay-3d-box');
-                const toggleBtn = document.getElementById('btn-hardware-toggle');
+            if (s.smart_power_relay) {
+                const statusEl = document.getElementById('txt-relay-status');
+                const loadEl = document.getElementById('txt-relay-load');
+                const boxEl = document.getElementById('relay-3d-box');
+                const btn = document.getElementById('btn-power');
+                const isOn = s.smart_power_relay.status === "ON";
 
-                const isRelayOn = state.smart_power_relay.status === "ON";
-
-                if (rStatus) {
-                    rStatus.setAttribute('value', `RELAY: ${state.smart_power_relay.status}`);
-                    rStatus.setAttribute('color', isRelayOn ? "#10b981" : "#9ca3af");
+                if (statusEl) {
+                    statusEl.setAttribute('value', `RELAY: ${s.smart_power_relay.status}`);
+                    statusEl.setAttribute('color', isOn ? "#34d399" : "#94a3b8");
                 }
-                if (rPower) rPower.setAttribute('value', `${state.smart_power_relay.powerDraw} kW Load`);
-                if (rBox) rBox.setAttribute('material', 'color', isRelayOn ? "#38bdf8" : "#94a3b8");
-                if (toggleBtn) {
-                    toggleBtn.innerText = `Power: ${state.smart_power_relay.status}`;
-                    toggleBtn.style.background = isRelayOn ? "#ef4444" : "#ffffff";
-                    toggleBtn.style.color = isRelayOn ? "#ffffff" : "#090a0f";
-                }
+                if (loadEl) loadEl.setAttribute('value', `Load: ${s.smart_power_relay.powerDraw} kW`);
+                if (boxEl) boxEl.setAttribute('material', 'color', isOn ? "#34d399" : "#94a3b8");
+                if (btn) btn.innerText = `Power: ${s.smart_power_relay.status}`;
             }
         });
-
-        window.addEventListener('DOMContentLoaded', initDoorframeCamera);
     </script>
 </body>
 </html>
