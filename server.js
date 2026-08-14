@@ -96,7 +96,7 @@ app.post('/api/telemetry/climate', (req, res) => {
 
     console.log(`[CLIMATE UPDATE] Temp: ${tempVal}°F | Humidity: ${humVal}% | Status: ${statusVal}`);
 
-    // Broadcast live telemetry update to WebAR Quest HUD
+    // Broadcast live telemetry update to Mobile WebAR HUD
     io.emit('climateStateUpdate', {
         deviceId: deviceId || 'smart_climate_node',
         temperature: tempVal,
@@ -116,7 +116,7 @@ app.post('/api/telemetry/safety', (req, res) => {
 
     console.log(`[PERIMETER UPDATE] Distance: ${distVal} in | State: ${stateVal}`);
 
-    // Broadcast live perimeter alert to WebAR Quest HUD
+    // Broadcast live perimeter alert to Mobile WebAR HUD
     io.emit('twinStateUpdate', {
         perimeter_monitor: {
             perimeter: stateVal,
@@ -144,7 +144,7 @@ app.post('/api/telemetry/relay', (req, res) => {
     res.json({ status: "success", message: "Power relay telemetry processed" });
 });
 
-// Manual Diagnostic Endpoint (Trigger from any browser to test WebAR HUD updates)
+// Manual Diagnostic Endpoint
 app.get('/api/test-telemetry', (req, res) => {
     console.log("[TEST TELEMETRY TRIGGERED]");
 

@@ -33,7 +33,7 @@
 </head>
 <body style="margin: 0; overflow: hidden; background: transparent !important;">
 
-    <button id="custom-ar-btn">ENTER NOEMATA AR</button>
+    <button id="custom-ar-btn">ENTER MOBILE AR SETUP</button>
 
     <script>
         // Force WebGL Canvas Transparency for AR Passthrough
@@ -50,7 +50,7 @@
             }
         });
 
-        // Hit-Testing & Controller Surface Manager
+        // Mobile Screen Tap & Hit-Testing Surface Manager
         AFRAME.registerComponent('noemata-spatial-manager', {
             init: function () {
                 this.xrHitTestSource = null;
@@ -78,7 +78,7 @@
                         this.refSpace = refSpace;
                     });
 
-                    // LISTEN FOR CONTROLLER TRIGGER TO LOCK SURFACE LOCATION
+                    // LISTEN FOR MOBILE SCREEN TAP TO LOCK SURFACE LOCATION
                     session.addEventListener('select', () => {
                         if (!window.isHoveringButton && window.latestHitPos && !window.isPosLocked) {
                             window.isPosLocked = true;
@@ -89,7 +89,7 @@
                             const saveBtnText = document.getElementById('save-btn-text');
 
                             if (statusLabel) {
-                                statusLabel.setAttribute('value', 'SURFACE LOCKED! CLICK ANCHOR NOW.');
+                                statusLabel.setAttribute('value', 'SURFACE LOCKED! TAP CREATE ANCHOR.');
                                 statusLabel.setAttribute('color', '#39ff14');
                             }
                             if (saveBtn) saveBtn.setAttribute('color', '#00f0ff');
@@ -129,7 +129,7 @@
         });
     </script>
 
-    <!-- Configure Native A-Frame Scene for 6DoF Passthrough & Hit Testing -->
+    <!-- Configure Native A-Frame Scene for Mobile Passthrough & Hit Testing -->
     <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: anchors; referenceSpaceType: local-floor;"
              force-ar-passthrough
              background="transparent: true"
@@ -138,18 +138,20 @@
              xr-mode-ui="enabled: false"
              style="background-color: rgba(0,0,0,0) !important; background: transparent !important;">
         
-        <!-- Camera Rig -->
+        <!-- Mobile Camera Rig with Gaze Pointer / Touch Raycaster -->
         <a-entity id="rig" position="0 0 0">
-            <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
+            <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
+                <a-entity id="hud-pointer"
+                          raycaster="objects: .ui-button; far: 3;"
+                          cursor="fuse: false;" position="0 0 -1"
+                          geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
+                          material="color: #00f0ff; shader: flat; opacity: 0.8; depthTest: false;">
+                </a-entity>
+            </a-entity>
         </a-entity>
 
-        <!-- Laser Controllers with Raycaster targeting UI buttons -->
-        <a-entity laser-controls="hand: left" raycaster="objects: .ui-button; far: 5;"></a-entity>
-        <a-entity laser-controls="hand: right" raycaster="objects: .ui-button; far: 5;"></a-entity>
-
-        <!-- PREFERRED CYBERNETIC UI TERMINAL PANEL -->
-        <a-entity id="world-terminal" position="0 1.4 -1.5">
-            <a-cylinder radius="0.015" height="0.9" color="#1e293b" position="0 -0.45 0" material="shader: flat; depthTest: true;"></a-cylinder>
+        <!-- CYBERNETIC UI TERMINAL PANEL (STANDALONE FLOATING CARD - NO VERTICAL LINE) -->
+        <a-entity id="world-terminal" position="0 1.4 -1.2">
             
             <!-- Main Dark Card Background -->
             <a-plane width="1.4" height="0.75" color="#0d1117" opacity="0.92" material="shader: flat; depthTest: true;"></a-plane>
@@ -170,7 +172,7 @@
 
             <!-- Subtitle Instruction Text -->
             <a-text id="hud-status-label" 
-                    value="AIM AT HARDWARE & PULL TRIGGER TO LOCK" 
+                    value="AIM AT SURFACE & TAP SCREEN TO LOCK" 
                     color="#94a3b8" 
                     align="center" 
                     width="1.5" 
@@ -199,7 +201,6 @@
     </a-scene>
 
     <script>
-        // Force secure WebSocket configuration for live Render deployment
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
 
         window.isPosLocked = false;
@@ -238,7 +239,7 @@
             const spatialComp = sceneEl.components['noemata-spatial-manager'];
             const activeKey = devices[currentDeviceIndex].key;
 
-            statusLabel.setAttribute('value', 'LOCKING ANCHOR TO META OS...');
+            statusLabel.setAttribute('value', 'REGISTERING SPATIAL ANCHOR...');
             statusLabel.setAttribute('color', '#00f0ff');
 
             let anchorUUID = null;
@@ -265,7 +266,7 @@
             })
             .then(res => res.json())
             .then(() => {
-                statusLabel.setAttribute('value', `SAVED ${activeKey.toUpperCase()} TO META OS!`);
+                statusLabel.setAttribute('value', `SAVED ${activeKey.toUpperCase()} TO MOBILE AR!`);
                 statusLabel.setAttribute('color', '#39ff14');
                 setTimeout(() => resetLock(), 1800);
             });
@@ -276,11 +277,11 @@
             window.lockedCoords = null;
             saveBtn.setAttribute('color', '#334155');
             saveBtnText.setAttribute('color', '#94a3b8');
-            statusLabel.setAttribute('value', 'AIM AT HARDWARE & PULL TRIGGER TO LOCK');
+            statusLabel.setAttribute('value', 'AIM AT SURFACE & TAP SCREEN TO LOCK');
             statusLabel.setAttribute('color', '#94a3b8');
         }
 
-        // Native A-Frame enterAR() invocation
+        // Mobile WebAR enterAR() launcher
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const sceneEl = document.querySelector('a-scene');
             const button = document.getElementById('custom-ar-btn');

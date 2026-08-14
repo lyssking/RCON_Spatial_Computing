@@ -25,7 +25,7 @@
 </head>
 <body style="margin: 0; overflow: hidden; background-color: transparent !important;">
 
-    <button id="custom-ar-btn">ENTER QUEST PASSTHROUGH AR</button>
+    <button id="custom-ar-btn">ENTER MOBILE WEBAR</button>
 
     <script>
         // Force Canvas Alpha Transparency for WebXR Passthrough
@@ -93,7 +93,7 @@
                 <a-box class="gaze-target" gaze-hud-manager width="0.18" height="0.18" depth="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-box>
                 <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
 
-                <!-- GAZE-ACTIVATED HUD CARD (OFF BY DEFAULT) -->
+                <!-- GAZE-ACTIVATED HUD CARD -->
                 <a-entity class="info-card" position="0 0.38 0" visible="false">
                     <a-plane width="0.7" height="0.3" color="#0d1117" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
                     <a-plane width="0.72" height="0.32" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader: flat; depthTest: false;"></a-plane>
@@ -107,7 +107,7 @@
                 <a-cylinder class="gaze-target" gaze-hud-manager radius="0.12" height="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-cylinder>
                 <a-text value="[ PERIMETER GUARD ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
 
-                <!-- GAZE-ACTIVATED HUD CARD (OFF BY DEFAULT) -->
+                <!-- GAZE-ACTIVATED HUD CARD -->
                 <a-entity class="info-card" position="0 0.38 0" visible="false">
                     <a-plane width="0.65" height="0.3" color="#0d1117" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
                     <a-plane width="0.67" height="0.32" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader: flat; depthTest: false;"></a-plane>
@@ -121,7 +121,7 @@
                 <a-box class="gaze-target" gaze-hud-manager width="0.15" height="0.15" depth="0.15" material="color: #64748b; shader: flat; wireframe: true; depthTest: false;"></a-box>
                 <a-text value="[ POWER RELAY ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
 
-                <!-- GAZE-ACTIVATED HUD CARD (OFF BY DEFAULT) -->
+                <!-- GAZE-ACTIVATED HUD CARD -->
                 <a-entity class="info-card" position="0 0.38 0" visible="false">
                     <a-plane width="0.65" height="0.3" color="#0d1117" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
                     <a-plane width="0.67" height="0.32" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader: flat; depthTest: false;"></a-plane>
@@ -215,7 +215,7 @@
             }
         });
 
-        // Native WebXR Passthrough Launcher
+        // Native WebAR Passthrough Launcher
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const sceneEl = document.querySelector('a-scene');
             const button = document.getElementById('custom-ar-btn');
