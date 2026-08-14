@@ -7,26 +7,27 @@
     
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <!-- Ultra-fast QR scanner engine for mobile browsers -->
+    <!-- jsQR scanner engine -->
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 
     <style>
         html, body, .a-canvas {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; background-color: transparent !important;
+            overflow: hidden;
+            background-color: transparent !important;
             background: transparent !important;
             touch-action: none; user-select: none;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
         }
 
-        /* 1. DOORFRAME QR SCANNER MODAL */
+        /* 1. PRE-AR DOORFRAME SCANNER MODAL */
         #door-scan-screen {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             background: #0d1117;
             display: flex; flex-direction: column;
             align-items: center; justify-content: space-between;
-            box-sizing: border-box; padding: 30px 20px;
+            box-sizing: border-box; padding: 25px 20px;
             z-index: 100000;
         }
 
@@ -36,21 +37,22 @@
         }
 
         .scan-header h1 {
-            font-size: 18px; margin: 0 0 8px 0; letter-spacing: 1px;
+            font-size: 17px; margin: 0 0 6px 0; letter-spacing: 1px;
         }
 
         .scan-header p {
-            color: #94a3b8; font-size: 13px; margin: 0;
+            color: #94a3b8; font-size: 12px; margin: 0;
         }
 
         .scanner-frame-box {
             position: relative;
-            width: 260px; height: 260px;
+            width: 250px; height: 250px;
             border: 2px solid #00f0ff;
             border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 0 30px rgba(0, 240, 255, 0.3);
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.3);
             display: flex; align-items: center; justify-content: center;
+            background: #000;
         }
 
         #scanner-video {
@@ -59,7 +61,7 @@
         }
 
         .crosshair-reticle {
-            position: absolute; width: 180px; height: 180px;
+            position: absolute; width: 170px; height: 170px;
             border: 1px dashed rgba(57, 255, 20, 0.8);
             border-radius: 8px;
             pointer-events: none;
@@ -67,31 +69,39 @@
 
         #scan-status {
             color: #39ff14; font-family: monospace; font-size: 13px;
-            margin-top: 15px; text-align: center;
+            margin-top: 12px; text-align: center;
+        }
+
+        .action-btn {
+            background: #00f0ff; color: #000000; border: none;
+            padding: 16px 28px; border-radius: 8px; font-family: monospace;
+            font-size: 15px; font-weight: bold; cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+            display: none; width: 100%; max-width: 280px;
         }
 
         .bypass-btn {
             background: #1e293b; color: #94a3b8; border: 1px solid #30363d;
-            padding: 12px 24px; border-radius: 8px; font-family: monospace;
-            font-size: 13px; cursor: pointer;
+            padding: 10px 18px; border-radius: 6px; font-family: monospace;
+            font-size: 12px; cursor: pointer; margin-top: 10px;
         }
 
-        /* 2. STAGNANT 2D SCREEN OVERLAY DURING ACTIVE WEBAR */
+        /* 2. STAGNANT 2D SCREEN OVERLAY DURING AR */
         #mobile-ar-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none;
             display: flex; flex-direction: column;
             justify-content: space-between;
-            box-sizing: border-box; padding: 18px;
+            box-sizing: border-box; padding: 16px;
             z-index: 10000;
         }
 
         .ar-status-banner {
-            background: rgba(13, 17, 23, 0.88);
+            background: rgba(13, 17, 23, 0.9);
             border: 1px solid #00f0ff;
             border-radius: 10px;
-            padding: 12px 16px;
+            padding: 10px 14px;
             color: #ffffff;
             backdrop-filter: blur(8px);
             text-align: center;
@@ -99,11 +109,11 @@
         }
 
         .ar-status-banner h2 {
-            margin: 0; font-size: 14px; color: #00f0ff; letter-spacing: 1px;
+            margin: 0; font-size: 13px; color: #00f0ff; letter-spacing: 1px;
         }
 
         .ar-status-banner span {
-            font-size: 12px; color: #39ff14; font-family: monospace;
+            font-size: 11px; color: #39ff14; font-family: monospace;
         }
 
         .ar-control-bar {
@@ -111,9 +121,9 @@
         }
 
         .ar-btn {
-            flex: 1; padding: 14px 10px; border-radius: 8px;
+            flex: 1; padding: 14px 8px; border-radius: 8px;
             border: none; font-family: monospace; font-weight: bold;
-            font-size: 13px; cursor: pointer; text-transform: uppercase;
+            font-size: 12px; cursor: pointer; text-transform: uppercase;
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
 
@@ -127,13 +137,13 @@
         }
     </style>
 </head>
-<body style="margin: 0; overflow: hidden; background: transparent !important;">
+<body style="margin: 0; overflow: hidden; background-color: transparent !important;">
 
-    <!-- 1. PRE-AR DOORFRAME SCANNER MODAL -->
+    <!-- 1. PRE-AR DOORFRAME SCANNER SCREEN -->
     <div id="door-scan-screen">
         <div class="scan-header">
-            <h1>NOEMATA // SPATIAL INITIALIZER</h1>
-            <p>Stand at door threshold & point camera at Doorframe QR Code</p>
+            <h1>NOEMATA // SPATIAL VIEWER</h1>
+            <p>Scan Doorframe QR to calibrate room coordinates</p>
         </div>
 
         <div class="scanner-frame-box">
@@ -141,19 +151,18 @@
             <div class="crosshair-reticle"></div>
         </div>
 
-        <div>
-            <div id="scan-status">> Initializing Optical Sensor...</div>
-            <div style="text-align: center; margin-top: 15px;">
-                <button class="bypass-btn" id="btn-manual-launch">MANUAL LAUNCH (WITHOUT QR)</button>
-            </div>
+        <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+            <div id="scan-status">> Point camera at Doorframe QR...</div>
+            <button class="action-btn" id="btn-enter-ar">ENTER MOBILE AR</button>
+            <button class="bypass-btn" id="btn-manual-launch">SKIP SCAN & LAUNCH</button>
         </div>
     </div>
 
-    <!-- 2. STAGNANT 2D TOUCHSCREEN OVERLAY -->
+    <!-- 2. STAGNANT 2D OVERLAY IN WEBAR -->
     <div id="mobile-ar-overlay" style="display: none;">
         <div class="ar-status-banner">
-            <h2>ORIGIN: DOORFRAME [SYNCHRONIZED]</h2>
-            <span id="overlay-sync-state">ROOM TWIN LOADED FROM QUEST MAP</span>
+            <h2>ROOM TWIN ACTIVE</h2>
+            <span id="overlay-sync-state">FACILITY SPATIAL MAP LOADED</span>
         </div>
 
         <div class="ar-control-bar">
@@ -163,6 +172,7 @@
     </div>
 
     <script>
+        // Force WebGL Canvas Transparency for AR Passthrough
         AFRAME.registerComponent('force-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -189,7 +199,7 @@
             }
         });
 
-        // Gaze Reticle Hover Component
+        // Gaze Hover Component
         AFRAME.registerComponent('gaze-hud-manager', {
             init: function () {
                 this.el.addEventListener('raycaster-intersected', () => {
@@ -204,7 +214,7 @@
         });
     </script>
 
-    <!-- Native A-Frame Scene with DOM Overlay Support -->
+    <!-- Native A-Frame Scene -->
     <a-scene force-passthrough
              webxr="requiredFeatures: local-floor; optionalFeatures: dom-overlay; overlayElement: #mobile-ar-overlay; referenceSpaceType: local-floor;"
              renderer="alpha: true; colorManagement: true; antialias: true;"
@@ -214,7 +224,7 @@
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
                 <a-entity cursor="fuse: false;"
-                          raycaster="objects: .gaze-target, .interactive-btn; far: 6;"
+                          raycaster="objects: .gaze-target, .interactive-btn; far: 10;"
                           position="0 0 -1"
                           geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
                           material="color: #00f0ff; shader: flat; opacity: 0.8; depthTest: false;">
@@ -224,11 +234,11 @@
 
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
-        <!-- MASTER WORLD ZERO CONTAINER (LOCKED TO DOORFRAME ORIGIN) -->
+        <!-- MASTER WORLD ZERO CONTAINER -->
         <a-entity id="noemata-spatial-anchor" position="0 0 0">
 
             <!-- 1. SMART CLIMATE NODE -->
-            <a-entity id="smart-climate-asset" position="-0.868 -0.289 -0.301" billboard>
+            <a-entity id="smart-climate-asset" position="-0.868 1.4 -1.2" billboard>
                 <a-box class="gaze-target" gaze-hud-manager width="0.18" height="0.18" depth="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-box>
                 <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.3" align="center" color="#00f0ff" font="monoid"></a-text>
 
@@ -241,7 +251,7 @@
             </a-entity>
 
             <!-- 2. PERIMETER MONITOR -->
-            <a-entity id="perimeter-monitor-asset" position="1.051 -2.719 -1.409" billboard>
+            <a-entity id="perimeter-monitor-asset" position="1.051 1.4 -1.8" billboard>
                 <a-cylinder class="gaze-target" gaze-hud-manager radius="0.12" height="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-cylinder>
                 <a-text value="[ PERIMETER GUARD ]" position="0 0.18 0" width="1.3" align="center" color="#64748b" font="monoid"></a-text>
 
@@ -254,7 +264,7 @@
             </a-entity>
 
             <!-- 3. SMART POWER RELAY -->
-            <a-entity id="smart-relay-asset" position="1.716 -0.858 -0.481" billboard>
+            <a-entity id="smart-relay-asset" position="1.716 1.4 -1.5" billboard>
                 <a-box id="relay-3d-box" class="gaze-target" gaze-hud-manager width="0.15" height="0.15" depth="0.15" material="color: #64748b; shader: flat; wireframe: true; depthTest: false;"></a-box>
                 <a-text value="[ POWER RELAY ]" position="0 0.18 0" width="1.3" align="center" color="#64748b" font="monoid"></a-text>
 
@@ -273,7 +283,7 @@
     <script>
         const socket = io({ transports: ['websocket', 'polling'], secure: true });
 
-        // Apply Real-World Offsets from spatial-db.json
+        // Apply Database Coordinates
         function applyDynamicPositions(map) {
             if (!map) return;
             const targets = [
@@ -286,7 +296,9 @@
                 const data = map[item.key];
                 const el = document.getElementById(item.elementId);
                 if (data && el && data.x !== undefined) {
-                    el.setAttribute('position', `${data.x} ${data.y} ${data.z}`);
+                    // Normalize Y to minimum eye-level if negative
+                    const posY = parseFloat(data.y) < 0 ? (1.4 + parseFloat(data.y)).toFixed(3) : data.y;
+                    el.setAttribute('position', `${data.x} ${posY} ${data.z}`);
                 }
             });
         }
@@ -298,10 +310,11 @@
         socket.on('spatialAnchorsUpdated', (anchors) => applyDynamicPositions(anchors));
 
         // ==============================================================
-        // PRE-AR CAMERA STREAM & DOORFRAME QR SCANNER
+        // PRE-AR CAMERA SCANNER WITH DIRECT USER GESTURE UNLOCK
         // ==============================================================
         const videoEl = document.getElementById('scanner-video');
         const scanStatus = document.getElementById('scan-status');
+        const enterArBtn = document.getElementById('btn-enter-ar');
         const doorScanScreen = document.getElementById('door-scan-screen');
         const arOverlay = document.getElementById('mobile-ar-overlay');
         let cameraStream = null;
@@ -313,10 +326,10 @@
                     video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
                 });
                 videoEl.srcObject = cameraStream;
-                scanStatus.innerText = "> Point at Doorframe QR to align origin...";
                 startQRInspection();
             } catch (err) {
-                scanStatus.innerText = "> Camera access failed. Use manual launch.";
+                scanStatus.innerText = "> Camera preview busy. Tap skip to start.";
+                enterArBtn.style.display = 'block';
             }
         }
 
@@ -334,79 +347,69 @@
                     const code = jsQR(imgData.data, imgData.width, imgData.height);
                     if (code && (code.data.includes("doorframe") || code.data.includes("noemata"))) {
                         clearInterval(scanInterval);
-                        onDoorframeDetected(code.data);
+                        scanStatus.innerText = `> QR DETECTED! TAP BUTTON TO ENTER.`;
+                        scanStatus.style.color = "#00f0ff";
+                        enterArBtn.style.display = 'block';
                     }
                 }
             }, 120);
         }
 
-        function onDoorframeDetected(qrValue) {
-            scanStatus.innerText = `> DOORFRAME ALIGNED (${qrValue})! LAUNCHING AR...`;
-            scanStatus.style.color = "#00f0ff";
-
-            if (cameraStream) {
-                cameraStream.getTracks().forEach(t => t.stop());
-            }
-
-            setTimeout(() => launchWebAR(true), 600);
-        }
-
-        document.getElementById('btn-manual-launch').addEventListener('click', () => {
-            if (cameraStream) {
-                cameraStream.getTracks().forEach(t => t.stop());
-            }
+        function stopPreArCamera() {
             clearInterval(scanInterval);
-            launchWebAR(false);
-        });
-
-        // ==============================================================
-        // WEBAR ZERO-ORIGIN LAUNCHER
-        // ==============================================================
-        function launchWebAR(fromDoorframe) {
-            const sceneEl = document.querySelector('a-scene');
-
-            const startAR = () => {
-                if (sceneEl.enterAR) {
-                    sceneEl.enterAR();
-                } else {
-                    sceneEl.enterVR();
-                }
-                doorScanScreen.style.display = 'none';
-                arOverlay.style.display = 'flex';
-
-                if (fromDoorframe) {
-                    recenterToCurrentPose();
-                }
-            };
-
-            if (sceneEl.hasLoaded) {
-                startAR();
-            } else {
-                sceneEl.addEventListener('loaded', startAR);
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(t => t.stop());
+                cameraStream = null;
+            }
+            if (videoEl.srcObject) {
+                videoEl.srcObject = null;
             }
         }
 
-        function recenterToCurrentPose() {
+        // DIRECT USER-GESTURE HANDLER (Fixes mobile WebXR security rejection)
+        function triggerEnterAR() {
+            stopPreArCamera();
+            doorScanScreen.style.display = 'none';
+            arOverlay.style.display = 'flex';
+
+            const sceneEl = document.querySelector('a-scene');
+            if (sceneEl.enterAR) {
+                sceneEl.enterAR();
+            } else if (sceneEl.enterVR) {
+                sceneEl.enterVR();
+            }
+
+            // Recenter to current phone pose
+            setTimeout(() => {
+                const cameraEl = document.getElementById('main-camera');
+                const spatialAnchor = document.getElementById('noemata-spatial-anchor');
+                if (cameraEl && spatialAnchor) {
+                    const camPos = cameraEl.object3D.position;
+                    const camRot = cameraEl.object3D.rotation;
+                    spatialAnchor.object3D.position.set(camPos.x, 0, camPos.z);
+                    spatialAnchor.object3D.rotation.set(0, camRot.y, 0);
+                }
+            }, 300);
+        }
+
+        enterArBtn.addEventListener('click', triggerEnterAR);
+        document.getElementById('btn-manual-launch').addEventListener('click', triggerEnterAR);
+
+        // Re-sync Button in AR
+        document.getElementById('btn-resync').addEventListener('click', (e) => {
+            e.stopPropagation();
             const cameraEl = document.getElementById('main-camera');
             const spatialAnchor = document.getElementById('noemata-spatial-anchor');
-
             if (cameraEl && spatialAnchor) {
                 const camPos = cameraEl.object3D.position;
                 const camRot = cameraEl.object3D.rotation;
-
                 spatialAnchor.object3D.position.set(camPos.x, 0, camPos.z);
                 spatialAnchor.object3D.rotation.set(0, camRot.y, 0);
-
-                const bannerText = document.getElementById('overlay-sync-state');
-                if (bannerText) bannerText.innerText = "ORIGIN RE-ZEROED AT DOORFRAME";
+                document.getElementById('overlay-sync-state').innerText = "ORIGIN RE-ZEROED AT DOOR";
             }
-        }
-
-        document.getElementById('btn-resync').addEventListener('click', (e) => {
-            e.stopPropagation();
-            recenterToCurrentPose();
         });
 
+        // Hardware Toggle Button
         document.getElementById('btn-hardware-toggle').addEventListener('click', (e) => {
             e.stopPropagation();
             fetch('/api/hardware/relay/toggle', { method: 'POST' })
@@ -414,7 +417,7 @@
         });
 
         // ==============================================================
-        // LIVE TELEMETRY SOCKET LISTENERS
+        // TELEMETRY SOCKET LISTENERS
         // ==============================================================
         socket.on('climateStateUpdate', (data) => {
             const tempText = document.getElementById('popup-climate-temp');
