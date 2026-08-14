@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOEMATA // GAZE OPERATOR VIEWER</title>
+    <title>NOEMATA // OPERATOR HUD & CONTROL</title>
     
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -43,23 +43,59 @@
             }
         });
 
+        // Custom Component: Billboarding + Distance-Based Proximity Fading
+        AFRAME.registerComponent('billboard-proximity', {
+            schema: {
+                maxDistance: { type: 'number', default: 3.5 },
+                minDistance: { type: 'number', default: 0.5 }
+            },
+            init: function () {
+                this.cameraEl = document.getElementById('main-camera');
+            },
+            tick: function () {
+                if (!this.cameraEl) return;
+
+                const nodePos = this.el.object3D.position;
+                const camPos = this.cameraEl.object3D.position;
+
+                // 1. BILLBOARDING: Always rotate node around Y-axis to face camera directly
+                const dx = camPos.x - nodePos.x;
+                const dz = camPos.z - nodePos.z;
+                const angleY = Math.atan2(dx, dz);
+                this.el.object3D.rotation.y = angleY;
+
+                // 2. PROXIMITY FADING: Calculate 3D Euclidean distance
+                const dist = nodePos.distanceTo(camPos);
+
+                // Determine opacity (1.0 = fully visible, 0.0 = transparent/hidden)
+                let opacity = 1.0;
+                if (dist > this.data.maxDistance) {
+                    opacity = 0.0;
+                } else if (dist > (this.data.maxDistance - 1.0)) {
+                    opacity = (this.data.maxDistance - dist); // Smooth linear fade out
+                } else if (dist < this.data.minDistance) {
+                    opacity = dist / this.data.minDistance;
+                }
+
+                // Apply opacity to all direct text and plane elements
+                const isVisible = opacity > 0.05;
+                this.el.setAttribute('visible', isVisible);
+            }
+        });
+
         // Gaze Hover Manager for HUD Popups
         AFRAME.registerComponent('gaze-hud-manager', {
             init: function () {
                 this.el.addEventListener('raycaster-intersected', (evt) => {
                     const parentNode = this.el.parentElement;
                     const card = parentNode.querySelector('.info-card');
-                    if (card) {
-                        card.setAttribute('visible', 'true');
-                    }
+                    if (card) card.setAttribute('visible', 'true');
                 });
 
                 this.el.addEventListener('raycaster-intersected-cleared', (evt) => {
                     const parentNode = this.el.parentElement;
                     const card = parentNode.querySelector('.info-card');
-                    if (card) {
-                        card.setAttribute('visible', 'false');
-                    }
+                    if (card) card.setAttribute('visible', 'false');
                 });
             }
         });
@@ -71,12 +107,12 @@
         renderer="colorManagement: true; antialias: true; alpha: true;" 
         xr-mode-ui="enabled: false">
 
-        <!-- Camera Rig & Gaze Raycaster Pointer -->
+        <!-- Camera Rig & Touch Mouse Raycaster -->
         <a-entity id="rig" position="0 0 0">
             <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
-                <a-entity id="hud-pointer"
-                          raycaster="objects: .gaze-target; far: 10;"
-                          cursor="fuse: false;" position="0 0 -1"
+                <a-entity cursor="rayOrigin: mouse; fuse: false;"
+                          raycaster="objects: .gaze-target, .interactive-btn; far: 5;"
+                          position="0 0 -1"
                           geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
                           material="color: #00f0ff; shader: flat; opacity: 0.8; depthTest: false;">
                 </a-entity>
@@ -89,7 +125,7 @@
         <a-entity id="noemata-spatial-anchor">
 
             <!-- 1. SMART CLIMATE NODE -->
-            <a-entity id="smart-climate-asset" position="0 1.4 -1.2">
+            <a-entity id="smart-climate-asset" position="0 1.4 -1.2" billboard-proximity="maxDistance: 4.0; minDistance: 0.4;">
                 <a-box class="gaze-target" gaze-hud-manager width="0.18" height="0.18" depth="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-box>
                 <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.2" align="center" color="#00f0ff" font="monoid"></a-text>
 
@@ -103,7 +139,7 @@
             </a-entity>
 
             <!-- 2. PERIMETER MONITOR -->
-            <a-entity id="perimeter-monitor-asset" position="-0.6 1.4 -1.5">
+            <a-entity id="perimeter-monitor-asset" position="-0.6 1.4 -1.5" billboard-proximity="maxDistance: 4.0; minDistance: 0.4;">
                 <a-cylinder class="gaze-target" gaze-hud-manager radius="0.12" height="0.18" material="color: #00f0ff; shader: flat; wireframe: true; depthTest: false;"></a-cylinder>
                 <a-text value="[ PERIMETER GUARD ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
 
@@ -116,17 +152,22 @@
                 </a-entity>
             </a-entity>
 
-            <!-- 3. SMART POWER RELAY -->
-            <a-entity id="smart-relay-asset" position="0.6 1.4 -1.5">
-                <a-box class="gaze-target" gaze-hud-manager width="0.15" height="0.15" depth="0.15" material="color: #64748b; shader: flat; wireframe: true; depthTest: false;"></a-box>
+            <!-- 3. SMART POWER RELAY (WITH TWO-WAY CONTROL TOGGLE) -->
+            <a-entity id="smart-relay-asset" position="0.6 1.4 -1.5" billboard-proximity="maxDistance: 4.0; minDistance: 0.4;">
+                <a-box id="relay-3d-box" class="gaze-target" gaze-hud-manager width="0.15" height="0.15" depth="0.15" material="color: #64748b; shader: flat; wireframe: true; depthTest: false;"></a-box>
                 <a-text value="[ POWER RELAY ]" position="0 0.18 0" width="1.2" align="center" color="#64748b" font="monoid"></a-text>
 
-                <!-- GAZE-ACTIVATED HUD CARD -->
-                <a-entity class="info-card" position="0 0.38 0" visible="false">
-                    <a-plane width="0.65" height="0.3" color="#0d1117" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
-                    <a-plane width="0.67" height="0.32" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader: flat; depthTest: false;"></a-plane>
-                    <a-text id="popup-relay-status" value="RELAY: OFF" color="#ffffff" width="1.0" position="-0.27 0.06 0.01" font="monoid"></a-text>
-                    <a-text id="popup-relay-power" value="LOAD: 0.0 kW" color="#64748b" width="0.8" position="-0.27 -0.04 0.01" font="monoid"></a-text>
+                <!-- GAZE-ACTIVATED HUD CARD WITH INTERACTIVE TOGGLE BUTTON -->
+                <a-entity class="info-card" position="0 0.42 0" visible="false">
+                    <a-plane width="0.75" height="0.4" color="#0d1117" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-plane width="0.77" height="0.42" color="#00f0ff" opacity="0.3" position="0 0 -0.005" material="shader: flat; depthTest: false;"></a-plane>
+                    <a-text id="popup-relay-status" value="RELAY: OFF" color="#ffffff" width="1.0" position="-0.32 0.11 0.01" font="monoid"></a-text>
+                    <a-text id="popup-relay-power" value="LOAD: 0.0 kW" color="#64748b" width="0.8" position="-0.32 0.02 0.01" font="monoid"></a-text>
+
+                    <!-- INTERACTIVE SPATIAL BUTTON TO CONTROL PHYSICAL HARDWARE -->
+                    <a-plane id="btn-toggle-relay" class="interactive-btn" width="0.6" height="0.12" color="#00f0ff" position="0 -0.10 0.02" material="shader: flat; depthTest: false;">
+                        <a-text id="btn-toggle-text" value="[ TAP TO SWITCH POWER ]" color="#000000" width="1.1" align="center" position="0 0 0.01" font="monoid"></a-text>
+                    </a-plane>
                 </a-entity>
             </a-entity>
 
@@ -155,15 +196,13 @@
             });
         }
 
-        // Fetch DB positions on load
         fetch('/api/spatial/map')
             .then(res => res.json())
             .then(db => applyDynamicPositions(db.anchors || db));
 
-        // Listen for live database updates
         socket.on('spatialAnchorsUpdated', (anchors) => applyDynamicPositions(anchors));
 
-        // 1. Live Climate Telemetry Listener
+        // 1. Live Climate Telemetry
         socket.on('climateStateUpdate', (data) => {
             const tempText = document.getElementById('popup-climate-temp');
             const statusText = document.getElementById('popup-climate-status');
@@ -180,7 +219,7 @@
             }
         });
 
-        // 2. Live Twin State Listener (Perimeter & Relay)
+        // 2. Live Twin State & Relay Updates
         socket.on('twinStateUpdate', (state) => {
             if (state.perimeter_monitor) {
                 const pStatus = document.getElementById('popup-perimeter-status');
@@ -201,7 +240,8 @@
             if (state.smart_power_relay) {
                 const rStatus = document.getElementById('popup-relay-status');
                 const rPower = document.getElementById('popup-relay-power');
-                const rBox = document.querySelector('#smart-relay-asset a-box');
+                const rBox = document.getElementById('relay-3d-box');
+                const btnToggle = document.getElementById('btn-toggle-relay');
 
                 const isRelayOn = state.smart_power_relay.status === "ON";
                 const rColor = isRelayOn ? "#00f0ff" : "#64748b";
@@ -212,28 +252,40 @@
                 }
                 if (rPower) rPower.setAttribute('value', `LOAD: ${state.smart_power_relay.powerDraw} kW`);
                 if (rBox) rBox.setAttribute('material', 'color', rColor);
+                if (btnToggle) btnToggle.setAttribute('color', isRelayOn ? "#ff0055" : "#00f0ff");
             }
         });
 
-        // Native WebAR Passthrough Launcher
+        // ==============================================================
+        // TWO-WAY CONTROL TRIGGER (TOGGLE HARDWARE)
+        // ==============================================================
+        function triggerRelayToggle(e) {
+            if (e) e.stopPropagation();
+            console.log("[WEBAR] Toggling physical power relay...");
+            
+            // Method 1: Emit via Socket.io
+            socket.emit('toggleRelay');
+
+            // Method 2: Fallback HTTPS POST Endpoint
+            fetch('/api/hardware/relay/toggle', { method: 'POST' })
+                .catch(err => console.error("Toggle request failed:", err));
+        }
+
+        // Bind click listeners to both the 3D box and the HUD button
+        document.getElementById('btn-toggle-relay').addEventListener('click', triggerRelayToggle);
+        document.getElementById('relay-3d-box').addEventListener('click', triggerRelayToggle);
+
+        // Native WebAR Launcher
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const sceneEl = document.querySelector('a-scene');
             const button = document.getElementById('custom-ar-btn');
 
-            const launch = () => {
-                if (sceneEl.enterAR) {
-                    sceneEl.enterAR();
-                } else {
-                    sceneEl.enterVR();
-                }
-                button.style.display = 'none';
-            };
-
-            if (sceneEl.hasLoaded) {
-                launch();
-            } else {
-                sceneEl.addEventListener('loaded', launch);
+            if (sceneEl.enterAR) {
+                sceneEl.enterAR();
+            } else if (sceneEl.enterVR) {
+                sceneEl.enterVR();
             }
+            button.style.display = 'none';
         });
     </script>
 </body>

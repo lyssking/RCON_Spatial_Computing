@@ -7,7 +7,7 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-// Initialize Socket.io with CORS enabled for WebAR clients
+// Initialize Socket.io with CORS enabled for WebAR clients & Arduinos
 const io = new Server(server, {
     cors: {
         origin: "*",
@@ -23,7 +23,15 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 // ==============================================================
-// DATABASE HELPERS (Safely initializes spatial-db.json)
+// IN-MEMORY HARDWARE STATE TRACKER
+// ==============================================================
+let currentHardwareState = {
+    relayStatus: "OFF",
+    powerDraw: "0.0"
+};
+
+// ==============================================================
+// DATABASE HELPERS
 // ==============================================================
 function readDB() {
     if (!fs.existsSync(DB_PATH)) {
@@ -53,14 +61,10 @@ function writeDB(data) {
 // ==============================================================
 // SPATIAL MAP ROUTES
 // ==============================================================
-
-// Fetch Spatial Map & Saved Anchors
 app.get('/api/spatial/map', (req, res) => {
-    const db = readDB();
-    res.json(db);
+    res.json(readDB());
 });
 
-// Register Hardware Anchor Position & Persistent UUID
 app.post('/api/spatial/register', (req, res) => {
     const { deviceId, position, anchorUUID } = req.body;
     const db = readDB();
@@ -74,19 +78,17 @@ app.post('/api/spatial/register', (req, res) => {
     };
 
     writeDB(db);
-
     console.log(`[ANCHOR REGISTERED] Device: ${deviceId} | Position:`, position);
 
-    // Broadcast updated anchor positions to all connected WebAR clients
     io.emit('spatialAnchorsUpdated', db.anchors);
     res.json({ status: 'success', deviceId, position, anchorUUID });
 });
 
 // ==============================================================
-// HARDWARE TELEMETRY ROUTES (Receives HTTPS POSTs from Arduinos)
+// HARDWARE TELEMETRY & TWO-WAY CONTROL ROUTES
 // ==============================================================
 
-// 1. Climate Node Telemetry (DHT11 / DHT22 Sensor)
+// 1. Climate Node Telemetry
 app.post('/api/telemetry/climate', (req, res) => {
     const { deviceId, temperature, humidity, status } = req.body;
 
@@ -94,9 +96,6 @@ app.post('/api/telemetry/climate', (req, res) => {
     const humVal = humidity !== undefined ? humidity : "--";
     const statusVal = status || (parseFloat(tempVal) > 85 ? "OVERHEATING_WARNING" : "OPTIMAL");
 
-    console.log(`[CLIMATE UPDATE] Temp: ${tempVal}°F | Humidity: ${humVal}% | Status: ${statusVal}`);
-
-    // Broadcast live telemetry update to Mobile WebAR HUD
     io.emit('climateStateUpdate', {
         deviceId: deviceId || 'smart_climate_node',
         temperature: tempVal,
@@ -107,16 +106,13 @@ app.post('/api/telemetry/climate', (req, res) => {
     res.json({ status: "success", message: "Climate telemetry processed" });
 });
 
-// 2. Safety / Perimeter Monitor Telemetry (Ultrasonic Sensor)
+// 2. Safety / Perimeter Monitor Telemetry
 app.post('/api/telemetry/safety', (req, res) => {
     const { deviceId, distance, perimeter } = req.body;
 
     const distVal = distance !== undefined ? distance : 0;
     const stateVal = perimeter || (distVal > 0 && distVal < 12 ? "BREACH_ALERT" : "SECURE");
 
-    console.log(`[PERIMETER UPDATE] Distance: ${distVal} in | State: ${stateVal}`);
-
-    // Broadcast live perimeter alert to Mobile WebAR HUD
     io.emit('twinStateUpdate', {
         perimeter_monitor: {
             perimeter: stateVal,
@@ -128,26 +124,53 @@ app.post('/api/telemetry/safety', (req, res) => {
     res.json({ status: "success", message: "Safety telemetry processed" });
 });
 
-// 3. Smart Power Relay Telemetry / Webhook
+// 3. Smart Power Relay Status Endpoint (Receives Telemetry)
 app.post('/api/telemetry/relay', (req, res) => {
-    const { deviceId, state, powerDraw } = req.body;
+    const { state, powerDraw } = req.body;
 
-    console.log(`[POWER RELAY UPDATE] State: ${state} | Load: ${powerDraw} kW`);
+    if (state !== undefined) currentHardwareState.relayStatus = state;
+    if (powerDraw !== undefined) currentHardwareState.powerDraw = powerDraw;
 
     io.emit('twinStateUpdate', {
         smart_power_relay: {
-            status: state || "OFF",
-            powerDraw: powerDraw !== undefined ? powerDraw : "0.0"
+            status: currentHardwareState.relayStatus,
+            powerDraw: currentHardwareState.powerDraw
         }
     });
 
-    res.json({ status: "success", message: "Power relay telemetry processed" });
+    res.json({ status: "success", currentHardwareState });
 });
 
-// Manual Diagnostic Endpoint
-app.get('/api/test-telemetry', (req, res) => {
-    console.log("[TEST TELEMETRY TRIGGERED]");
+// 4. TWO-WAY CONTROL: WebAR Client Command to Toggle Physical Relay
+app.post('/api/hardware/relay/toggle', (req, res) => {
+    // Toggle state in memory
+    const newStatus = currentHardwareState.relayStatus === "ON" ? "OFF" : "ON";
+    const newPower = newStatus === "ON" ? "0.42" : "0.0";
 
+    currentHardwareState.relayStatus = newStatus;
+    currentHardwareState.powerDraw = newPower;
+
+    console.log(`[BI-DIRECTIONAL CONTROL] Operator toggled relay to: ${newStatus}`);
+
+    // Broadcast to physical Arduino & WebAR clients simultaneously
+    io.emit('relayHardwareCommand', { command: newStatus });
+    io.emit('twinStateUpdate', {
+        smart_power_relay: {
+            status: newStatus,
+            powerDraw: newPower
+        }
+    });
+
+    res.json({ status: "success", newState: newStatus, powerDraw: newPower });
+});
+
+// Endpoint for non-WebSocket Arduinos to poll command state
+app.get('/api/hardware/relay/status', (req, res) => {
+    res.json({ command: currentHardwareState.relayStatus });
+});
+
+// Diagnostic Test Route
+app.get('/api/test-telemetry', (req, res) => {
     io.emit('climateStateUpdate', {
         temperature: "76.4",
         humidity: "42.0",
@@ -156,10 +179,10 @@ app.get('/api/test-telemetry', (req, res) => {
 
     io.emit('twinStateUpdate', {
         perimeter_monitor: { perimeter: "SECURE", distance: 24, breachCount: 0 },
-        smart_power_relay: { status: "ON", powerDraw: "0.18" }
+        smart_power_relay: { status: currentHardwareState.relayStatus, powerDraw: currentHardwareState.powerDraw }
     });
 
-    res.send("Test telemetry broadcast emitted to all WebAR clients!");
+    res.send("Test telemetry broadcast emitted!");
 });
 
 // ==============================================================
@@ -168,9 +191,25 @@ app.get('/api/test-telemetry', (req, res) => {
 io.on('connection', (socket) => {
     console.log(`[WEBAR CLIENT CONNECTED] ID: ${socket.id}`);
 
-    // Send latest DB state immediately upon client connection
     const db = readDB();
     socket.emit('spatialAnchorsUpdated', db.anchors || db);
+
+    // Allow WebAR client to directly trigger relay toggle via WebSocket
+    socket.on('toggleRelay', () => {
+        const newStatus = currentHardwareState.relayStatus === "ON" ? "OFF" : "ON";
+        const newPower = newStatus === "ON" ? "0.42" : "0.0";
+
+        currentHardwareState.relayStatus = newStatus;
+        currentHardwareState.powerDraw = newPower;
+
+        io.emit('relayHardwareCommand', { command: newStatus });
+        io.emit('twinStateUpdate', {
+            smart_power_relay: {
+                status: newStatus,
+                powerDraw: newPower
+            }
+        });
+    });
 
     socket.on('disconnect', () => {
         console.log(`[WEBAR CLIENT DISCONNECTED] ID: ${socket.id}`);
@@ -184,6 +223,6 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`==================================================`);
     console.log(`  NOEMATA SPATIAL SERVER ACTIVE ON PORT ${PORT}`);
-    console.log(`  READY FOR HARDWARE HTTPS TELEMETRY & WEBAR AR`);
+    console.log(`  READY FOR HARDWARE TELEMETRY & TWO-WAY AR CONTROL`);
     console.log(`==================================================`);
 });
