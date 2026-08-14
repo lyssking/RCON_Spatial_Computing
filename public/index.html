@@ -64,6 +64,7 @@
             }
         });
 
+        // Makes labels/cards rotate to face the user continuously
         AFRAME.registerComponent('billboard', {
             tick: function () {
                 const cam = document.getElementById('main-camera');
@@ -73,6 +74,42 @@
                 this.el.object3D.rotation.y = Math.atan2(camPos.x - nodePos.x, camPos.z - nodePos.z);
             }
         });
+
+        // Gaze/Glance Detector: Toggles visibility when the center crosshair enters/leaves
+        AFRAME.registerComponent('gaze-reactive', {
+            init: function () {
+                const parent = this.el;
+                const card = parent.querySelector('.info-card');
+
+                parent.addEventListener('raycaster-intersected', () => {
+                    if (card) {
+                        card.setAttribute('visible', 'true');
+                        card.setAttribute('animation__scale', {
+                            property: 'scale',
+                            to: '1 1 1',
+                            dur: 150,
+                            easing: 'easeOutQuad'
+                        });
+                    }
+                });
+
+                parent.addEventListener('raycaster-intersected-cleared', () => {
+                    if (card) {
+                        card.setAttribute('animation__scale', {
+                            property: 'scale',
+                            to: '0.001 0.001 0.001',
+                            dur: 150,
+                            easing: 'easeInQuad'
+                        });
+                        setTimeout(() => {
+                            if (card.getAttribute('scale').x < 0.1) {
+                                card.setAttribute('visible', 'false');
+                            }
+                        }, 160);
+                    }
+                });
+            }
+        });
     </script>
 
     <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: dom-overlay; referenceSpaceType: local-floor;"
@@ -80,8 +117,17 @@
              renderer="alpha: true; colorManagement: true; antialias: true;"
              xr-mode-ui="enabled: false">
         
+        <!-- Center-Screen Gaze Pointer -->
         <a-entity id="rig" position="0 0 0">
-            <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
+            <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
+                <a-entity id="gaze-cursor"
+                          cursor="fuse: false;"
+                          raycaster="objects: .gaze-target; far: 10;"
+                          position="0 0 -1"
+                          geometry="primitive: ring; radiusInner: 0.003; radiusOuter: 0.006"
+                          material="color: #00f0ff; shader: flat; opacity: 0.5">
+                </a-entity>
+            </a-entity>
         </a-entity>
 
         <a-entity light="type: ambient; intensity: 1.5;"></a-entity>
@@ -90,12 +136,12 @@
         <a-entity id="world-space-container" position="0 0 0">
 
             <!-- 1. CLIMATE NODE -->
-            <a-entity id="smart-climate-asset" billboard position="-0.85 1.5 -2.4">
+            <a-entity class="gaze-target" id="smart-climate-asset" billboard gaze-reactive position="-0.85 1.5 -2.4">
                 <a-box id="climate-mesh" width="0.16" height="0.16" depth="0.16" material="color: #00f0ff; wireframe: true; opacity: 0.8"></a-box>
                 <a-text value="[ CLIMATE NODE ]" position="0 0.18 0" width="1.4" align="center" color="#00f0ff" font="monoid"></a-text>
 
-                <!-- Permanently visible live HUD card -->
-                <a-entity class="info-card" position="0 0.42 0" visible="true">
+                <!-- Hidden by default until glanced at -->
+                <a-entity class="info-card" position="0 0.42 0" visible="false" scale="0.001 0.001 0.001">
                     <a-plane width="0.75" height="0.30" color="#121620" opacity="0.92" material="shader: flat; depthTest: false;"></a-plane>
                     <a-text id="popup-climate-status" value="CLIMATE: OPTIMAL" color="#34d399" width="1.2" position="-0.32 0.07 0.01" font="monoid"></a-text>
                     <a-text id="popup-climate-temp" value="TEMP: 72.4 °F | HUM: 45.0%" color="#ffffff" width="1.0" position="-0.32 -0.04 0.01" font="monoid"></a-text>
@@ -103,12 +149,12 @@
             </a-entity>
 
             <!-- 2. PERIMETER MONITOR -->
-            <a-entity id="perimeter-monitor-asset" billboard position="1.20 1.8 -3.1">
+            <a-entity class="gaze-target" id="perimeter-monitor-asset" billboard gaze-reactive position="1.20 1.8 -3.1">
                 <a-cylinder id="perimeter-mesh" radius="0.10" height="0.18" material="color: #60a5fa; wireframe: true; opacity: 0.8"></a-cylinder>
                 <a-text value="[ PERIMETER GUARD ]" position="0 0.20 0" width="1.4" align="center" color="#60a5fa" font="monoid"></a-text>
 
-                <!-- Permanently visible live HUD card -->
-                <a-entity class="info-card" position="0 0.42 0" visible="true">
+                <!-- Hidden by default until glanced at -->
+                <a-entity class="info-card" position="0 0.42 0" visible="false" scale="0.001 0.001 0.001">
                     <a-plane width="0.75" height="0.30" color="#121620" opacity="0.92" material="shader: flat; depthTest: false;"></a-plane>
                     <a-text id="popup-perimeter-status" value="SHIELD: SECURE" color="#34d399" width="1.2" position="-0.32 0.07 0.01" font="monoid"></a-text>
                     <a-text id="popup-perimeter-breach" value="DIST: 28 in | BREACH: 0" color="#94a3b8" width="1.0" position="-0.32 -0.04 0.01" font="monoid"></a-text>
@@ -116,12 +162,12 @@
             </a-entity>
 
             <!-- 3. SMART POWER RELAY -->
-            <a-entity id="smart-relay-asset" billboard position="1.45 1.0 -1.8">
+            <a-entity class="gaze-target" id="smart-relay-asset" billboard gaze-reactive position="1.45 1.0 -1.8">
                 <a-box id="relay-mesh" width="0.15" height="0.15" depth="0.15" material="color: #34d399; wireframe: true; opacity: 0.8"></a-box>
                 <a-text value="[ POWER RELAY ]" position="0 0.18 0" width="1.4" align="center" color="#ffffff" font="monoid"></a-text>
 
-                <!-- Permanently visible live HUD card -->
-                <a-entity class="info-card" position="0 0.42 0" visible="true">
+                <!-- Hidden by default until glanced at -->
+                <a-entity class="info-card" position="0 0.42 0" visible="false" scale="0.001 0.001 0.001">
                     <a-plane width="0.75" height="0.30" color="#121620" opacity="0.92" material="shader: flat; depthTest: false;"></a-plane>
                     <a-text id="popup-relay-status" value="RELAY: ON" color="#34d399" width="1.2" position="-0.32 0.07 0.01" font="monoid"></a-text>
                     <a-text id="popup-relay-power" value="LOAD: 1.42 kW" color="#ffffff" width="1.0" position="-0.32 -0.04 0.01" font="monoid"></a-text>
@@ -133,11 +179,10 @@
     </a-scene>
 
     <script>
-        // Explicit WebSockets transport connection
         const socket = io({ transports: ['websocket', 'polling'] });
         const sceneEl = document.querySelector('a-scene');
 
-        // Apply dynamic coordinates from DB
+        // Apply registered database coordinates
         function applyRegisteredAnchors(map) {
             if (!map) return;
             const dataMap = map.anchors || map;
@@ -183,7 +228,7 @@
             }
         });
 
-        // 2. PERIMETER & RELAY LIVE INGEST (From Bridge /api/telemetry/safety)
+        // 2. PERIMETER & RELAY LIVE INGEST
         socket.on('twinStateUpdate', (state) => {
             if (state.perimeter_monitor) {
                 const pStatus = document.getElementById('popup-perimeter-status');
@@ -228,7 +273,7 @@
             }
         });
 
-        // Native WebXR AR Entry
+        // Launch AR
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const btn = document.getElementById('custom-ar-btn');
             if (sceneEl.enterAR) {
