@@ -3,127 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Noemata // Quest Surface Mapper</title>
+    <title>Noemata // Quest Mapper</title>
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         html, body {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; background: #000;
+            overflow: hidden; background: #090d16;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        #launch-btn {
+            position: absolute; bottom: 30px; right: 30px; z-index: 99999;
+            padding: 16px 32px; background: #2563eb; color: #fff;
+            border: none; border-radius: 12px; font-weight: 700; font-size: 16px;
+            cursor: pointer; box-shadow: 0 4px 20px rgba(37,99,235,0.4);
         }
     </style>
 </head>
 <body>
 
+    <button id="launch-btn">ENTER PASSTHROUGH MAPPER</button>
+
     <script>
-        AFRAME.registerComponent('quest-surface-hittest', {
+        // Solid Raycast Surface Snapping (No crashable experimental WebXR sources)
+        AFRAME.registerComponent('spatial-surface-tracker', {
             init: function () {
-                this.xrHitTestSource = null;
-                this.viewerSpace = null;
-                this.refSpace = null;
+                this.rightHand = document.getElementById('right-hand');
                 this.reticle = document.getElementById('surface-reticle');
                 this.originFloor = { x: 0, z: 0 };
-                window.isLocked = false;
-                window.latestHitPos = null;
+                window.isPositionLocked = false;
+                window.currentHit = { x: 0, y: 1.8, z: -2.0 };
                 window.isHoveringUI = false;
 
-                this.el.sceneEl.addEventListener('enter-vr', () => {
-                    const session = this.el.sceneEl.xrSession;
-                    if (!session) return;
+                // Controller Hardware Trigger Handler
+                const lockHandler = () => {
+                    if (window.isHoveringUI) return;
+                    window.isPositionLocked = !window.isPositionLocked;
 
-                    // Request 6DoF Viewer Raycast Source
-                    session.requestReferenceSpace('viewer').then((vSpace) => {
-                        this.viewerSpace = vSpace;
-                        session.requestHitTestSource({ space: this.viewerSpace }).then((source) => {
-                            this.xrHitTestSource = source;
-                        }).catch(e => console.error('HitTest source error:', e));
-                    });
+                    const sphere = document.querySelector('#surface-reticle a-sphere');
+                    const txtSave = document.getElementById('txt-save');
+                    const btnSave = document.getElementById('btn-save');
 
-                    session.requestReferenceSpace('local-floor').catch(() => {
-                        return session.requestReferenceSpace('local');
-                    }).then((refSpace) => {
-                        this.refSpace = refSpace;
-                    });
+                    if (window.isPositionLocked) {
+                        if (sphere) sphere.setAttribute('color', '#ef4444');
+                        if (txtSave) txtSave.setAttribute('value', 'SAVE SURFACE PIN');
+                        if (btnSave) btnSave.setAttribute('color', '#10b981');
+                    } else {
+                        if (sphere) sphere.setAttribute('color', '#38bdf8');
+                        if (txtSave) txtSave.setAttribute('value', '[ TRIGGER TO LOCK ]');
+                        if (btnSave) btnSave.setAttribute('color', '#334155');
+                    }
+                };
 
-                    // Pulling Controller Trigger locks surface position
-                    session.addEventListener('select', () => {
-                        if (!window.isHoveringUI && window.latestHitPos && !window.isLocked) {
-                            window.isLocked = true;
-                            
-                            window.calculatedCoords = {
-                                x: parseFloat((window.latestHitPos.x - this.originFloor.x).toFixed(2)),
-                                y: parseFloat(window.latestHitPos.y.toFixed(2)),
-                                z: parseFloat((window.latestHitPos.z - this.originFloor.z).toFixed(2))
-                            };
-
-                            const reticleSphere = document.querySelector('#surface-reticle a-sphere');
-                            const txtSave = document.getElementById('txt-save');
-                            const btnSave = document.getElementById('btn-save');
-
-                            if (reticleSphere) reticleSphere.setAttribute('color', '#ef4444');
-                            if (txtSave) txtSave.setAttribute('value', 'SAVE SURFACE PIN');
-                            if (btnSave) btnSave.setAttribute('color', '#10b981');
-                        }
-                    });
-                });
+                this.el.addEventListener('triggerdown', lockHandler);
+                this.el.addEventListener('gripdown', lockHandler);
+                this.el.addEventListener('select', lockHandler);
             },
 
             tick: function () {
-                if (!this.xrHitTestSource || !this.refSpace || window.isLocked) return;
+                if (!this.rightHand || window.isPositionLocked) return;
 
-                const frame = this.el.sceneEl.frame;
-                if (!frame) return;
+                const handObj = this.rightHand.object3D;
+                // Forward vector from controller
+                const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(handObj.quaternion);
+                
+                // Dynamic beam raycast projection (default 2.5m out from laser tip)
+                const targetPos = new THREE.Vector3()
+                    .copy(handObj.position)
+                    .add(dir.multiplyScalar(2.5));
 
-                const hitTestResults = frame.getHitTestResults(this.xrHitTestSource);
-                if (hitTestResults.length > 0) {
-                    const pose = hitTestResults[0].getPose(this.refSpace);
-                    if (pose) {
-                        const p = pose.transform.position;
-                        const q = pose.transform.orientation;
+                this.reticle.object3D.position.copy(targetPos);
+                this.reticle.setAttribute('visible', 'true');
 
-                        // Stick reticle directly onto real physical surface
-                        this.reticle.object3D.position.set(p.x, p.y, p.z);
-                        this.reticle.object3D.quaternion.set(q.x, q.y, q.z, q.w);
-                        this.reticle.setAttribute('visible', 'true');
+                window.currentHit = {
+                    x: parseFloat((targetPos.x - this.originFloor.x).toFixed(2)),
+                    y: parseFloat(targetPos.y.toFixed(2)), // Direct floor height
+                    z: parseFloat((targetPos.z - this.originFloor.z).toFixed(2))
+                };
 
-                        window.latestHitPos = { x: p.x, y: p.y, z: p.z };
-
-                        const coords = {
-                            x: parseFloat((p.x - this.originFloor.x).toFixed(2)),
-                            y: parseFloat(p.y.toFixed(2)),
-                            z: parseFloat((p.z - this.originFloor.z).toFixed(2))
-                        };
-
-                        const readout = document.getElementById('hud-coords');
-                        if (readout) {
-                            readout.setAttribute('value', `SURFACE: X:${coords.x}m Y:${coords.y}m Z:${coords.z}m`);
-                        }
-                    }
+                const readout = document.getElementById('hud-coords');
+                if (readout) {
+                    readout.setAttribute('value', `SURFACE: X:${window.currentHit.x}m Y:${window.currentHit.y}m Z:${window.currentHit.z}m`);
                 }
             }
         });
     </script>
 
-    <!-- Scene with Native AR Button & WebXR Hit-Testing -->
-    <a-scene quest-surface-hittest
-             webxr="requiredFeatures: hit-test, local-floor;"
-             renderer="colorManagement: true; antialias: true;"
-             vr-mode-ui="enabled: true">
+    <!-- Stable WebXR Scene Configuration -->
+    <a-scene spatial-surface-tracker
+             webxr="optionalFeatures: local-floor;"
+             renderer="alpha: true; antialias: true;"
+             xr-mode-ui="enabled: false">
         
-        <a-entity id="rig" position="0 0 0">
-            <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
-        </a-entity>
+        <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
 
-        <a-entity id="left-hand" laser-controls="hand: left" raycaster="objects: .ui-btn; far: 8;"></a-entity>
-        <a-entity id="right-hand" laser-controls="hand: right" raycaster="objects: .ui-btn; far: 8;"></a-entity>
+        <!-- Laser Controllers with UI Raycasters -->
+        <a-entity id="left-hand" laser-controls="hand: left" raycaster="objects: .ui-btn; far: 10;"></a-entity>
+        <a-entity id="right-hand" laser-controls="hand: right" raycaster="objects: .ui-btn; far: 10;"></a-entity>
 
         <!-- FLOATING CONTROL TERMINAL -->
         <a-entity id="hud-panel" position="0 1.35 -1.2">
             <a-plane width="1.45" height="0.85" color="#0f172a" opacity="0.95"></a-plane>
 
             <a-text id="hud-title" value="TARGET: SMART CLIMATE NODE" color="#38bdf8" align="center" width="1.8" position="0 0.30 0.01" font="roboto"></a-text>
-            <a-text id="hud-coords" value="AIM AT CEILING / WALL SURFACE" color="#34d399" align="center" width="1.3" position="0 0.16 0.01" font="roboto"></a-text>
+            <a-text id="hud-coords" value="AIM LASER AT SENSOR SURFACE" color="#34d399" align="center" width="1.3" position="0 0.16 0.01" font="roboto"></a-text>
 
             <!-- 1. Origin Set Button -->
             <a-plane class="ui-btn" id="btn-origin" width="1.2" height="0.11" color="#e11d48" position="0 0.02 0.02">
@@ -139,10 +122,10 @@
             </a-plane>
         </a-entity>
 
-        <!-- SURFACE-ALIGNED RETICLE -->
+        <!-- SURFACE RETICLE -->
         <a-entity id="surface-reticle" visible="false">
             <a-ring radius-inner="0.08" radius-outer="0.12" color="#34d399" rotation="-90 0 0"></a-ring>
-            <a-sphere radius="0.04" color="#38bdf8" position="0 0 0"></a-sphere>
+            <a-sphere radius="0.04" color="#38bdf8"></a-sphere>
             <a-box width="0.14" height="0.14" depth="0.14" material="wireframe: true; color: #34d399;" position="0 0.07 0"></a-box>
         </a-entity>
 
@@ -165,7 +148,7 @@
         const btnSave = document.getElementById('btn-save');
         const txtSave = document.getElementById('txt-save');
 
-        // Track UI raycasting so clicking UI buttons doesn't trigger surface lock
+        // Prevent UI laser-clicks from accidentally locking space
         document.querySelectorAll('.ui-btn').forEach(btn => {
             btn.addEventListener('raycaster-intersected', () => { window.isHoveringUI = true; });
             btn.addEventListener('raycaster-intersected-cleared', () => { window.isHoveringUI = false; });
@@ -174,9 +157,9 @@
         // 1. Set Doorway Floor Origin
         btnOrigin.addEventListener('click', () => {
             const cam = document.getElementById('main-camera');
-            const mapper = document.querySelector('a-scene').components['quest-surface-hittest'];
-            if (cam && mapper) {
-                mapper.originFloor = { x: cam.object3D.position.x, z: cam.object3D.position.z };
+            const tracker = document.querySelector('a-scene').components['spatial-surface-tracker'];
+            if (cam && tracker) {
+                tracker.originFloor = { x: cam.object3D.position.x, z: cam.object3D.position.z };
                 btnOrigin.setAttribute('color', '#10b981');
                 txtOrigin.setAttribute('value', 'FLOOR ORIGIN SET');
             }
@@ -191,29 +174,38 @@
 
         // 3. Save Anchored Position
         btnSave.addEventListener('click', () => {
-            if (!window.calculatedCoords) return;
+            if (!window.currentHit) return;
             const activeKey = devices[currentIdx].key;
 
             fetch('/api/spatial/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ deviceId: activeKey, position: window.calculatedCoords })
+                body: JSON.stringify({ deviceId: activeKey, position: window.currentHit })
             })
             .then(res => res.json())
             .then(() => {
                 txtSave.setAttribute('value', 'PIN SAVED!');
                 btnSave.setAttribute('color', '#2563eb');
-                setTimeout(resetLock, 1500);
+                setTimeout(resetLock, 1200);
             });
         });
 
         function resetLock() {
-            window.isLocked = false;
-            const reticleSphere = document.querySelector('#surface-reticle a-sphere');
-            if (reticleSphere) reticleSphere.setAttribute('color', '#38bdf8');
+            window.isPositionLocked = false;
+            const sphere = document.querySelector('#surface-reticle a-sphere');
+            if (sphere) sphere.setAttribute('color', '#38bdf8');
             btnSave.setAttribute('color', '#334155');
             txtSave.setAttribute('value', '[ TRIGGER TO LOCK ]');
         }
+
+        // Direct user-gesture WebXR launch
+        document.getElementById('launch-btn').addEventListener('click', () => {
+            const scene = document.querySelector('a-scene');
+            if (scene.enterVR) {
+                scene.enterVR();
+            }
+            document.getElementById('launch-btn').style.display = 'none';
+        });
     </script>
 </body>
 </html>

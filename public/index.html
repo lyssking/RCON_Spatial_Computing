@@ -51,11 +51,29 @@
         }
 
         #btn-power { background: #fff; color: #0f172a; border: none; }
+
+        #launch-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #090d16; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; padding: 24px;
+            box-sizing: border-box; z-index: 99999; text-align: center;
+        }
+
+        .launch-btn {
+            margin-top: 20px; padding: 16px 32px; background: #fff; color: #0f172a;
+            border-radius: 12px; font-size: 16px; font-weight: 700; border: none; cursor: pointer;
+        }
     </style>
 </head>
 <body>
 
-    <div id="mobile-hud">
+    <div id="launch-screen">
+        <h1 style="font-size: 20px; font-weight: 700; margin: 0 0 6px 0;">Noemata Vision</h1>
+        <p style="color: #94a3b8; margin: 0; font-size: 14px;">Stand in doorway facing into the room</p>
+        <button class="launch-btn" id="btn-start">ENTER FACILITY AR</button>
+    </div>
+
+    <div id="mobile-hud" style="display: none;">
         <div class="status-pill">
             <div class="dot"></div>
             <span id="hud-status">Telemetry Synchronized</span>
@@ -78,10 +96,9 @@
         });
     </script>
 
-    <a-scene embedded
-             webxr="optionalFeatures: hit-test, local-floor;"
+    <a-scene webxr="optionalFeatures: local-floor;"
              renderer="alpha: true; antialias: true;"
-             vr-mode-ui="enabled: true">
+             xr-mode-ui="enabled: false">
 
         <a-entity id="main-camera" camera position="0 1.6 0" look-controls></a-entity>
         <a-entity light="type: ambient; intensity: 1.5;"></a-entity>
@@ -154,6 +171,15 @@
             }
         }
 
+        document.getElementById('btn-start').addEventListener('click', () => {
+            document.getElementById('launch-screen').style.display = 'none';
+            document.getElementById('mobile-hud').style.display = 'flex';
+
+            const scene = document.querySelector('a-scene');
+            if (scene.enterVR) scene.enterVR();
+            setTimeout(setFloorOrigin, 250);
+        });
+
         document.getElementById('btn-recenter').addEventListener('click', (e) => {
             e.stopPropagation();
             setFloorOrigin();
@@ -164,7 +190,7 @@
             fetch('/api/hardware/relay/toggle', { method: 'POST' });
         });
 
-        // Telemetry Listeners
+        // Telemetry handlers
         socket.on('climateStateUpdate', d => {
             const statusEl = document.getElementById('txt-climate-status');
             const metricsEl = document.getElementById('txt-climate-metrics');
