@@ -1,11 +1,21 @@
 {
+  "spaceId": "noemata-main",
+  "originDatum": "doorframe_main",
   "anchors": {
-    "smart_climate_node": { "x": 0, "y": 1.4, "z": -1.2 },
-    "perimeter_monitor": { "x": -0.6, "y": 1.4, "z": -1.5 },
-    "smart_power_relay": { "x": 0.6, "y": 1.4, "z": -1.5 }
-  },
-  "matrix": {
-    "position": { "x": 0, "y": 0, "z": 0 },
-    "quaternion": { "_x": 0, "_y": 0, "_z": 0, "_w": 1 }
+    "smart_climate_node": {
+      "x": "-0.868",
+      "y": "-0.289",
+      "z": "-0.301"
+    },
+    "perimeter_monitor": {
+      "x": "1.051",
+      "y": "-2.719",
+      "z": "-1.409"
+    },
+    "smart_power_relay": {
+      "x": "1.716",
+      "y": "-0.858",
+      "z": "-0.481"
+    }
   }
 }
