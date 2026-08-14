@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOEMATA // SPATIAL ANCHOR SETUP</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>NOEMATA // MOBILE SPATIAL SETUP</title>
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
@@ -12,31 +12,144 @@
             background: transparent !important;
             margin: 0; padding: 0; overflow: hidden;
             width: 100%; height: 100%;
+            touch-action: none;
+            user-select: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
         }
+
+        /* 2D SCREEN OVERLAY HUD */
+        #mobile-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-sizing: border-box;
+            padding: 20px;
+            z-index: 10000;
+        }
+
+        .hud-card {
+            background: rgba(13, 17, 23, 0.88);
+            border: 1px solid #00f0ff;
+            border-radius: 10px;
+            padding: 14px 16px;
+            color: #ffffff;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 20px rgba(0, 240, 255, 0.2);
+            pointer-events: auto;
+            text-align: center;
+        }
+
+        #target-title {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+            color: #00f0ff;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        #status-instruction {
+            margin: 6px 0 0 0;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        /* STAGNANT BOTTOM BUTTONS */
+        .button-bar {
+            display: flex;
+            gap: 12px;
+            pointer-events: auto;
+            width: 100%;
+        }
+
+        .screen-btn {
+            flex: 1;
+            padding: 16px 10px;
+            border: none;
+            border-radius: 8px;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 15px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            outline: none;
+        }
+
+        #btn-next {
+            background: #1e293b;
+            color: #00f0ff;
+            border: 1px solid #00f0ff;
+        }
+
+        #btn-lock {
+            background: #334155;
+            color: #64748b;
+        }
+
+        #btn-lock.ready {
+            background: #39ff14;
+            color: #000000;
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.6);
+        }
+
+        #btn-save {
+            background: #334155;
+            color: #64748b;
+        }
+
+        #btn-save.active {
+            background: #00f0ff;
+            color: #000000;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.7);
+        }
+
         #custom-ar-btn {
             position: absolute;
-            bottom: 25px;
-            right: 25px;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 99999;
-            padding: 16px 28px;
+            padding: 18px 32px;
             background: #00f0ff;
             color: #000;
             border: none;
             border-radius: 8px;
             font-family: monospace;
             font-weight: bold;
-            font-size: 18px;
+            font-size: 16px;
             cursor: pointer;
-            box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.8);
+            pointer-events: auto;
         }
     </style>
 </head>
 <body style="margin: 0; overflow: hidden; background: transparent !important;">
 
-    <button id="custom-ar-btn">ENTER MOBILE AR SETUP</button>
+    <!-- 2D SCREEN OVERLAY (VISIBLE OVER CAMERA PASSTHROUGH) -->
+    <div id="mobile-overlay" style="display: none;">
+        <!-- Top Status Card -->
+        <div class="hud-card">
+            <div id="target-title">TARGET: SMART CLIMATE NODE</div>
+            <div id="status-instruction">Scan floor/wall to see green target</div>
+        </div>
+
+        <!-- Bottom Stagnant Buttons -->
+        <div class="button-bar">
+            <button class="screen-btn" id="btn-next">NEXT NODE</button>
+            <button class="screen-btn" id="btn-lock">LOCK SPOT</button>
+            <button class="screen-btn" id="btn-save">SAVE</button>
+        </div>
+    </div>
+
+    <button id="custom-ar-btn">LAUNCH AR SETUP</button>
 
     <script>
-        // Force WebGL Canvas Transparency for AR Passthrough
+        // Force WebGL Canvas Transparency
         AFRAME.registerComponent('force-ar-passthrough', {
             init: function () {
                 const scene = this.el;
@@ -51,48 +164,32 @@
             }
         });
 
-        // Mobile Hit-Testing & Surface Lock Manager
-        AFRAME.registerComponent('noemata-spatial-manager', {
+        // Robust Screen-Center Hit-Testing Component
+        AFRAME.registerComponent('mobile-ar-aligner', {
             init: function () {
                 this.xrHitTestSource = null;
                 this.viewerSpace = null;
                 this.refSpace = null;
                 this.previewEl = document.getElementById('placement-preview');
+                this.isSurfaceDetected = false;
 
                 this.el.sceneEl.addEventListener('enter-vr', () => {
                     const session = this.el.sceneEl.xrSession;
                     if (!session) return;
 
+                    // Request Viewer Space (Center of Phone Screen)
                     session.requestReferenceSpace('viewer').then((refSpace) => {
                         this.viewerSpace = refSpace;
                         session.requestHitTestSource({ space: this.viewerSpace }).then((source) => {
                             this.xrHitTestSource = source;
-                        }).catch(e => console.log('Hit-test source error:', e));
-                    }).catch(e => console.log('Viewer space error:', e));
+                        }).catch(e => console.error('HitTest Source error:', e));
+                    }).catch(e => console.error('ViewerSpace error:', e));
 
+                    // Request Local Floor
                     session.requestReferenceSpace('local-floor').catch(() => {
                         return session.requestReferenceSpace('local');
                     }).then((refSpace) => {
                         this.refSpace = refSpace;
-                    });
-
-                    // Lock surface location on tap (when not tapping a UI button)
-                    session.addEventListener('select', () => {
-                        if (!window.isHoveringButton && window.latestHitPos && !window.isPosLocked) {
-                            window.isPosLocked = true;
-                            window.lockedCoords = { ...window.latestHitPos };
-
-                            const statusLabel = document.getElementById('hud-status-label');
-                            const saveBtn = document.getElementById('btn-save-device');
-                            const saveBtnText = document.getElementById('save-btn-text');
-
-                            if (statusLabel) {
-                                statusLabel.setAttribute('value', 'SURFACE LOCKED! TAP CREATE ANCHOR.');
-                                statusLabel.setAttribute('color', '#39ff14');
-                            }
-                            if (saveBtn) saveBtn.setAttribute('color', '#00f0ff');
-                            if (saveBtnText) saveBtnText.setAttribute('color', '#000000');
-                        }
                     });
                 });
             },
@@ -104,9 +201,11 @@
                 if (!frame) return;
 
                 const hitTestResults = frame.getHitTestResults(this.xrHitTestSource);
+                const lockBtn = document.getElementById('btn-lock');
+                const statusText = document.getElementById('status-instruction');
+
                 if (hitTestResults.length > 0) {
-                    const hitResult = hitTestResults[0];
-                    const pose = hitResult.getPose(this.refSpace);
+                    const pose = hitTestResults[0].getPose(this.refSpace);
                     if (pose) {
                         const p = pose.transform.position;
                         const q = pose.transform.orientation;
@@ -122,74 +221,34 @@
                             y: parseFloat(p.y.toFixed(3)), 
                             z: parseFloat(p.z.toFixed(3)) 
                         };
+
+                        if (!this.isSurfaceDetected) {
+                            this.isSurfaceDetected = true;
+                            lockBtn.classList.add('ready');
+                            lockBtn.innerText = "LOCK SPOT";
+                            statusText.innerText = "Surface detected! Tap 'LOCK SPOT'";
+                            statusText.style.color = "#39ff14";
+                        }
                     }
                 }
             }
         });
     </script>
 
-    <!-- Configure Native A-Frame Scene -->
-    <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: anchors; referenceSpaceType: local-floor;"
+    <!-- Configure Native A-Frame Scene with DOM Overlay Support -->
+    <a-scene webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: dom-overlay; overlayElement: #mobile-overlay; referenceSpaceType: local-floor;"
              force-ar-passthrough
-             noemata-spatial-manager
+             mobile-ar-aligner
              renderer="alpha: true; colorManagement: true; antialias: true;"
              xr-mode-ui="enabled: false">
         
-        <!-- Mobile Camera with Touch Mouse Cursor for Buttons -->
-        <a-entity id="rig" position="0 0 0">
-            <a-entity id="main-camera" camera position="0 1.6 0" look-controls>
-                <a-entity cursor="rayOrigin: mouse; fuse: false;"
-                          raycaster="objects: .ui-button; far: 5;">
-                </a-entity>
-            </a-entity>
-        </a-entity>
-
+        <a-entity id="main-camera" camera look-controls position="0 1.6 0"></a-entity>
         <a-entity light="type: ambient; color: #ffffff; intensity: 1.5;"></a-entity>
 
-        <!-- FLOATING UI TERMINAL CARD -->
-        <a-entity id="world-terminal" position="0 1.3 -1.0">
-            
-            <!-- Dark Card Background -->
-            <a-plane width="1.2" height="0.65" color="#0d1117" opacity="0.95" material="shader: flat; depthTest: false;"></a-plane>
-            
-            <!-- Outer Cyan Frame -->
-            <a-plane width="1.24" height="0.69" color="#00f0ff" opacity="0.4" position="0 0 -0.005" material="shader: flat; depthTest: false;"></a-plane>
-
-            <!-- Header Text -->
-            <a-text id="hud-device-label" 
-                    value="TARGET: SMART CLIMATE NODE" 
-                    color="#00f0ff" 
-                    align="center" 
-                    width="1.8" 
-                    position="0 0.20 0.01" 
-                    font="monoid">
-            </a-text>
-
-            <!-- Status Instructions -->
-            <a-text id="hud-status-label" 
-                    value="POINT AT SURFACE & TAP TO LOCK" 
-                    color="#94a3b8" 
-                    align="center" 
-                    width="1.3" 
-                    position="0 0.06 0.01" 
-                    font="monoid">
-            </a-text>
-
-            <!-- Next Device Button -->
-            <a-plane class="ui-button" id="btn-toggle-device" width="0.48" height="0.14" color="#1e293b" position="-0.28 -0.14 0.02" material="shader: flat; depthTest: false;">
-                <a-text value="[ NEXT DEVICE ]" color="#00f0ff" width="1.1" align="center" position="0 0 0.01" font="monoid"></a-text>
-            </a-plane>
-
-            <!-- Create Anchor Button -->
-            <a-plane class="ui-button" id="btn-save-device" width="0.48" height="0.14" color="#334155" position="0.28 -0.14 0.02" material="shader: flat; depthTest: false;">
-                <a-text id="save-btn-text" value="[ CREATE ANCHOR ]" color="#94a3b8" width="1.1" align="center" position="0 0 0.01" font="monoid"></a-text>
-            </a-plane>
-        </a-entity>
-
-        <!-- GREEN TARGET RETICLE BOX & RING -->
+        <!-- GREEN TARGET RETICLE (FOLLOWS HIT-TEST SURFACE) -->
         <a-entity id="placement-preview" visible="false">
-            <a-ring radius-inner="0.06" radius-outer="0.08" color="#39ff14" rotation="-90 0 0" material="shader: flat; depthTest: false;"></a-ring>
-            <a-box width="0.10" height="0.10" depth="0.10" material="color: #39ff14; wireframe: true; depthTest: false;" position="0 0.05 0"></a-box>
+            <a-ring radius-inner="0.08" radius-outer="0.1" color="#39ff14" rotation="-90 0 0" material="shader: flat; depthTest: false;"></a-ring>
+            <a-box width="0.12" height="0.12" depth="0.12" material="color: #39ff14; wireframe: true; depthTest: false;" position="0 0.06 0"></a-box>
         </a-entity>
 
     </a-scene>
@@ -200,7 +259,6 @@
         window.isPosLocked = false;
         window.latestHitPos = null;
         window.lockedCoords = null;
-        window.isHoveringButton = false;
 
         const devices = [
             { key: 'smart_climate_node', label: 'TARGET: SMART CLIMATE NODE' },
@@ -209,76 +267,117 @@
         ];
         let currentDeviceIndex = 0;
 
-        const deviceLabel = document.getElementById('hud-device-label');
-        const statusLabel = document.getElementById('hud-status-label');
-        const toggleBtn = document.getElementById('btn-toggle-device');
-        const saveBtn = document.getElementById('btn-save-device');
-        const saveBtnText = document.getElementById('save-btn-text');
+        const targetTitle = document.getElementById('target-title');
+        const statusInstruction = document.getElementById('status-instruction');
+        const btnNext = document.getElementById('btn-next');
+        const btnLock = document.getElementById('btn-lock');
+        const btnSave = document.getElementById('btn-save');
 
-        // Prevent surface lock when hovering buttons
-        [toggleBtn, saveBtn].forEach(btn => {
-            btn.addEventListener('mouseenter', () => { window.isHoveringButton = true; });
-            btn.addEventListener('mouseleave', () => { window.isHoveringButton = false; });
-        });
-
-        // Toggle Next Device
-        toggleBtn.addEventListener('click', (e) => {
+        // 1. Next Node Button
+        btnNext.addEventListener('click', (e) => {
             e.stopPropagation();
             currentDeviceIndex = (currentDeviceIndex + 1) % devices.length;
-            deviceLabel.setAttribute('value', devices[currentDeviceIndex].label);
-            resetLock();
+            targetTitle.innerText = devices[currentDeviceIndex].label;
+            unlock();
         });
 
-        // Save Anchor Position
-        saveBtn.addEventListener('click', async (e) => {
+        // 2. Lock Spot Button
+        btnLock.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (!window.lockedCoords) return;
+            if (!window.latestHitPos) {
+                statusInstruction.innerText = "Point camera at floor/desk first!";
+                statusInstruction.style.color = "#ff0055";
+                return;
+            }
+
+            if (!window.isPosLocked) {
+                // Lock current position
+                window.isPosLocked = true;
+                window.lockedCoords = { ...window.latestHitPos };
+
+                btnLock.innerText = "UNLOCK";
+                btnLock.style.background = "#ff0055";
+                btnLock.style.color = "#ffffff";
+
+                btnSave.classList.add('active');
+                btnSave.innerText = "SAVE TO AR";
+
+                statusInstruction.innerText = `LOCKED AT (${window.lockedCoords.x}, ${window.lockedCoords.y}, ${window.lockedCoords.z})`;
+                statusInstruction.style.color = "#00f0ff";
+            } else {
+                unlock();
+            }
+        });
+
+        function unlock() {
+            window.isPosLocked = false;
+            window.lockedCoords = null;
+
+            btnLock.innerText = "LOCK SPOT";
+            btnLock.style.background = "";
+            btnLock.style.color = "";
+
+            btnSave.classList.remove('active');
+            btnSave.innerText = "SAVE";
+
+            statusInstruction.innerText = "Scan floor/wall to see green target";
+            statusInstruction.style.color = "#94a3b8";
+        }
+
+        // 3. Save Button
+        btnSave.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!window.lockedCoords) {
+                statusInstruction.innerText = "Lock a spot first before saving!";
+                statusInstruction.style.color = "#ff0055";
+                return;
+            }
 
             const activeKey = devices[currentDeviceIndex].key;
-
-            statusLabel.setAttribute('value', 'REGISTERING SPATIAL ANCHOR...');
-            statusLabel.setAttribute('color', '#00f0ff');
+            statusInstruction.innerText = `Saving ${activeKey}...`;
+            statusInstruction.style.color = "#00f0ff";
 
             fetch('/api/spatial/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    deviceId: activeKey, 
+                body: JSON.stringify({
+                    deviceId: activeKey,
                     position: window.lockedCoords
                 })
             })
             .then(res => res.json())
             .then(() => {
-                statusLabel.setAttribute('value', `SAVED ${activeKey.toUpperCase()}!`);
-                statusLabel.setAttribute('color', '#39ff14');
-                setTimeout(() => resetLock(), 1800);
+                statusInstruction.innerText = `SAVED ${activeKey.toUpperCase()}!`;
+                statusInstruction.style.color = "#39ff14";
+                setTimeout(() => unlock(), 2000);
             })
             .catch(err => {
-                statusLabel.setAttribute('value', 'SAVE ERROR! CHECK CONNECTION.');
-                statusLabel.setAttribute('color', '#ff0055');
+                statusInstruction.innerText = "Error saving position!";
+                statusInstruction.style.color = "#ff0055";
             });
         });
 
-        function resetLock() {
-            window.isPosLocked = false;
-            window.lockedCoords = null;
-            saveBtn.setAttribute('color', '#334155');
-            saveBtnText.setAttribute('color', '#94a3b8');
-            statusLabel.setAttribute('value', 'POINT AT SURFACE & TAP TO LOCK');
-            statusLabel.setAttribute('color', '#94a3b8');
-        }
-
-        // WebAR enterAR Launcher
+        // Launch AR with DOM Overlay
         document.getElementById('custom-ar-btn').addEventListener('click', () => {
             const sceneEl = document.querySelector('a-scene');
-            const button = document.getElementById('custom-ar-btn');
+            const launchBtn = document.getElementById('custom-ar-btn');
+            const overlay = document.getElementById('mobile-overlay');
 
-            if (sceneEl.enterAR) {
-                sceneEl.enterAR();
-            } else if (sceneEl.enterVR) {
-                sceneEl.enterVR();
+            const launch = () => {
+                if (sceneEl.enterAR) {
+                    sceneEl.enterAR();
+                } else {
+                    sceneEl.enterVR();
+                }
+                launchBtn.style.display = 'none';
+                overlay.style.display = 'flex';
+            };
+
+            if (sceneEl.hasLoaded) {
+                launch();
+            } else {
+                sceneEl.addEventListener('loaded', launch);
             }
-            button.style.display = 'none';
         });
     </script>
 </body>
